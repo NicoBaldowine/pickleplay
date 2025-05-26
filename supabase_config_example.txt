@@ -1,0 +1,17 @@
+# SUPABASE CONFIGURATION SETUP
+# =============================
+
+# 1. Create a .env file in the root directory with these variables:
+
+EXPO_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...your_anon_key_here
+
+# 2. How to get these values:
+#    - Go to https://app.supabase.com
+#    - Select your project
+#    - Go to Settings > API
+#    - Copy the Project URL and anon/public key
+
+# 3. Run the SQL in supabase_setup.sql in your Supabase SQL Editor
+
+# 4. Make sure your .env file is in .gitignore (it already is) 

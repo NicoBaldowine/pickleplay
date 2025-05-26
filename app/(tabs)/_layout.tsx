@@ -1,59 +1,79 @@
 import React from 'react';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Link, Tabs } from 'expo-router';
-import { Pressable } from 'react-native';
+import { Tabs } from 'expo-router';
+import { Home, Edit, Plus, Search, Gamepad2 } from 'lucide-react-native';
 
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
-import { useClientOnlyValue } from '@/components/useClientOnlyValue';
-
-// You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
-function TabBarIcon(props: {
-  name: React.ComponentProps<typeof FontAwesome>['name'];
-  color: string;
-}) {
-  return <FontAwesome size={28} style={{ marginBottom: -3 }} {...props} />;
-}
+const ACTIVE_COLOR = '#007AFF';
+const INACTIVE_COLOR = '#8E8E93';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
-        headerShown: useClientOnlyValue(false, true),
-      }}>
+        tabBarActiveTintColor: ACTIVE_COLOR,
+        tabBarInactiveTintColor: INACTIVE_COLOR,
+        headerShown: false,
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Tab One',
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
-          headerRight: () => (
-            <Link href="/modal" asChild>
-              <Pressable>
-                {({ pressed }) => (
-                  <FontAwesome
-                    name="info-circle"
-                    size={25}
-                    color={Colors[colorScheme ?? 'light'].text}
-                    style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            </Link>
+          title: 'Home',
+          tabBarIcon: ({ color, focused }) => (
+            <Home 
+              size={24} 
+              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} 
+            />
           ),
         }}
       />
       <Tabs.Screen
-        name="two"
+        name="request"
         options={{
-          title: 'Tab Two',
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+          title: 'Request',
+          tabBarIcon: ({ color, focused }) => (
+            <Edit 
+              size={24} 
+              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} 
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="create"
+        options={{
+          title: 'Create',
+          tabBarIcon: ({ color, focused }) => (
+            <Plus 
+              size={24} 
+              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} 
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: 'Search',
+          tabBarIcon: ({ color, focused }) => (
+            <Search 
+              size={24} 
+              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} 
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="games"
+        options={{
+          title: 'Games',
+          tabBarIcon: ({ color, focused }) => (
+            <Gamepad2 
+              size={24} 
+              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} 
+            />
+          ),
         }}
       />
     </Tabs>
   );
-}
+} 

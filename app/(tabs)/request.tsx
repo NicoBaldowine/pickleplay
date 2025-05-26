@@ -2,12 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function HomeTab() {
+export default function RequestTab() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>PicklePlay Home</Text>
-        <Text style={styles.subtitle}>Welcome to your pickleball app!</Text>
+        <Text style={styles.title}>Request Game</Text>
+        <Text style={styles.subtitle}>Find players for your next game</Text>
       </View>
     </SafeAreaView>
   );
