@@ -15,6 +15,7 @@ interface TopBarProps {
   onRightIconPress?: () => void;
   style?: ViewStyle; // Overall container style
   titleContainerStyle?: ViewStyle;
+  titleStyle?: TextStyle; // Custom title text style
 }
 
 const TopBar: React.FC<TopBarProps> = ({
@@ -27,6 +28,7 @@ const TopBar: React.FC<TopBarProps> = ({
   onRightIconPress,
   style,
   titleContainerStyle,
+  titleStyle,
 }) => {
   return (
     <View style={[styles.containerBase, style]}>
@@ -38,7 +40,7 @@ const TopBar: React.FC<TopBarProps> = ({
         )}
       </View>
       <View style={[styles.titleContainerBase, titleContainerStyle]}>
-        <Text style={styles.titleText}>{title}</Text>
+        <Text style={[styles.titleText, titleStyle]}>{title}</Text>
         {description && <Text style={styles.descriptionText}>{description}</Text>}
       </View>
       <View style={[styles.rightSection, !rightIcon && styles.sectionEmpty]}>

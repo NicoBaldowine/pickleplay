@@ -5,9 +5,11 @@ import { Plus, ChevronRight, User, Users, Calendar } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
 // Import custom components
-import TopBar from '../components/ui/TopBar';
 import ListItem from '../components/ui/ListItem';
 import Avatar from '../components/ui/Avatar';
+
+// Import colors
+import { COLORS } from '../constants/colors';
 
 // Import game service and types
 import { gameService, Game } from '../services/gameService';
@@ -17,7 +19,7 @@ import { globalTextStyles, withGlobalFont } from '../styles/globalStyles';
 
 const ICON_SIZE_AVATAR = 20;
 const ICON_SIZE_CHEVRON = 16;
-const ICON_COLOR_AVATAR = 'rgba(0, 0, 0, 0.5)';
+const ICON_COLOR_AVATAR = '#000000';
 const ICON_COLOR_CHEVRON = '#888';
 
 interface SchedulesScreenProps {
@@ -118,40 +120,38 @@ const SchedulesScreen: React.FC<SchedulesScreenProps> = ({ user, profile, onCrea
   const renderScheduleItem = (schedule: Game) => {
     const dateTime = gameService.formatGameDateTime(schedule.date, schedule.time);
     
-    // Format description: first line game type and skill level, second line location with more opacity
+    // Create chips array similar to SearchScreen
     const gameTypeCapitalized = schedule.game_type.charAt(0).toUpperCase() + schedule.game_type.slice(1);
     const skillLevelCapitalized = schedule.skill_level.charAt(0).toUpperCase() + schedule.skill_level.slice(1);
     
-    // Custom description component with different opacity for location
-    const customDescription = (
-      <View>
-        <Text style={styles.descriptionFirstLine}>{gameTypeCapitalized} - {skillLevelCapitalized}</Text>
-        <Text style={styles.descriptionSecondLine}>{schedule.location}</Text>
-      </View>
-    );
+    const chips = [
+      gameTypeCapitalized, // Game type
+      skillLevelCapitalized, // Level
+      schedule.location, // Location
+    ];
     
-    // Choose icon based on game type
-    const avatarIcon = schedule.game_type === 'singles' ? (
-      <User size={ICON_SIZE_AVATAR} color={ICON_COLOR_AVATAR} />
-    ) : (
-      <Users size={ICON_SIZE_AVATAR} color={ICON_COLOR_AVATAR} />
-    );
-
-    const rightElement = (
-      <ChevronRight size={ICON_SIZE_CHEVRON} color={ICON_COLOR_CHEVRON} />
+    // Define chip background colors based on game type
+    const chipBackgrounds = [
+      schedule.game_type === 'singles' ? '#96BE6B' : '#4DAAC2', // Game type chip - green for singles, blue for doubles
+      'rgba(0, 0, 0, 0.07)', // Level chip (default)
+      'rgba(0, 0, 0, 0.07)', // Location chip (default)
+    ];
+    
+    // Always use Calendar icon for schedules
+    const avatarIcon = (
+      <Calendar size={ICON_SIZE_AVATAR} color={ICON_COLOR_AVATAR} />
     );
 
     return (
-      <View key={schedule.id} style={[styles.listItem, { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, backgroundColor: '#F7EAC9', borderRadius: 12, marginVertical: 4 }]}>
-        <Avatar icon={avatarIcon} size={40} />
-        <View style={{ marginLeft: 12, flex: 1 }}>
-          <Text style={[globalTextStyles.semiBold, { fontSize: 16 }]}>{dateTime}</Text>
-          {customDescription}
-        </View>
-        <TouchableOpacity onPress={() => handleSchedulePress(schedule.id)} style={{ marginLeft: 'auto', paddingLeft: 8 }}>
-          {rightElement}
-        </TouchableOpacity>
-      </View>
+      <ListItem
+        key={schedule.id}
+        title={dateTime}
+        chips={chips}
+        chipBackgrounds={chipBackgrounds}
+        avatarIcon={avatarIcon}
+        onPress={() => handleSchedulePress(schedule.id)}
+        style={styles.listItem}
+      />
     );
   };
 
@@ -189,27 +189,11 @@ const SchedulesScreen: React.FC<SchedulesScreenProps> = ({ user, profile, onCrea
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}>
       <StatusBar barStyle="dark-content" />
-      <TopBar
-        title="Schedules"
-        description="Schedule games for other players to join"
-      />
+      <View style={styles.headerContainer}>
+        <Text style={styles.title}>Schedules</Text>
+        <Text style={styles.subtitle}>Schedule games for other players to join</Text>
+      </View>
       
-      {/* Create New Schedule Button */}
-      <View style={styles.createButtonContainer}>
-        <ListItem
-          title="Create new Schedule"
-          avatarIcon={<Plus size={ICON_SIZE_AVATAR} color={ICON_COLOR_AVATAR} />}
-          rightElement={<ChevronRight size={ICON_SIZE_CHEVRON} color={ICON_COLOR_CHEVRON} />}
-          onPress={handleCreateNewSchedule}
-          style={styles.listItem}
-        />
-      </View>
-
-      {/* Your Schedules Section */}
-      <View style={styles.sectionHeaderContainer}>
-        <Text style={styles.sectionTitle}>Your Schedules</Text>
-      </View>
-
       <ScrollView 
         style={styles.scrollViewContainer} 
         contentContainerStyle={styles.scrollViewContent}
@@ -221,12 +205,29 @@ const SchedulesScreen: React.FC<SchedulesScreenProps> = ({ user, profile, onCrea
           />
         }
       >
+        {/* Create New Schedule Button */}
+        <View style={styles.createButtonContainer}>
+          <ListItem
+            title="Create new Schedule"
+            avatarIcon={<Plus size={ICON_SIZE_AVATAR} color={ICON_COLOR_AVATAR} />}
+            onPress={handleCreateNewSchedule}
+            style={styles.createScheduleItem}
+          />
+        </View>
+
+        {/* Your Schedules Section */}
+        <View style={styles.sectionHeaderContainer}>
+          <Text style={styles.sectionTitle}>Your Schedules</Text>
+        </View>
+
         {loading ? (
           renderLoadingState()
         ) : error ? (
           renderErrorState()
         ) : sortedSchedules.length > 0 ? (
-          sortedSchedules.map(renderScheduleItem)
+          <View style={styles.schedulesListContainer}>
+            {sortedSchedules.map(renderScheduleItem)}
+          </View>
         ) : (
           renderEmptyState()
         )}
@@ -238,22 +239,45 @@ const SchedulesScreen: React.FC<SchedulesScreenProps> = ({ user, profile, onCrea
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
-  createButtonContainer: {
+  headerContainer: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  title: {
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 2,
+  },
+  subtitle: {
+    fontSize: 14,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_SECONDARY,
   },
   scrollViewContainer: {
     flex: 1,
-    marginTop: 4,
   },
   scrollViewContent: {
     paddingHorizontal: 16,
-    paddingTop: 4,
+    paddingTop: 8,
     paddingBottom: 8,
     flexGrow: 1,
+  },
+  createButtonContainer: {
+    marginBottom: 16,
+  },
+  createScheduleItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 60,
   },
   listItem: {
     marginBottom: 8,
@@ -291,14 +315,17 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   sectionHeaderContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
+    marginBottom: 12,
   },
   sectionTitle: {
-    ...globalTextStyles.h5,
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
     fontWeight: '800',
-    marginBottom: 4,
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 0,
+  },
+  schedulesListContainer: {
+    flex: 1,
   },
   descriptionFirstLine: {
     ...globalTextStyles.bodySmall,

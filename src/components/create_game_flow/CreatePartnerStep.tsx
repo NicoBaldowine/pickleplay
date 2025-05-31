@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Keyboard, TouchableWithoutFeedback, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Keyboard, TouchableWithoutFeedback, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { ArrowLeft, X, ChevronDown, Check } from 'lucide-react-native';
 import { globalTextStyles } from '../../styles/globalStyles';
+import { COLORS } from '../../constants/colors';
 
 interface CreatePartnerStepProps {
   onClose: () => void;
@@ -11,9 +12,11 @@ interface CreatePartnerStepProps {
 
 const ICON_SIZE_ACTION = 24;
 const ICON_SIZE_DROPDOWN = 18;
-const ICON_COLOR_DARK = '#333';
+const ICON_SIZE_AVATAR = 20;
+const ICON_COLOR_DARK = '#000000';
 const ICON_COLOR_MEDIUM = '#888';
 const ICON_COLOR_BLUE = '#007AFF';
+const STROKE_WIDTH_STANDARD = 1.8;
 
 const levelOptions = [
   { id: 'beginner', label: 'Beginner' },
@@ -77,18 +80,19 @@ const CreatePartnerStep: React.FC<CreatePartnerStepProps> = ({ onClose, onBack, 
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.scrollContent} 
+          contentContainerStyle={styles.scrollContentContainer}
+          showsVerticalScrollIndicator={false}
+        >
           <Text style={styles.mainTitle}>Create a New Partner</Text>
-          <Text style={styles.descriptionText}>
-            Enter your partner's information to add them to your saved partners.
-          </Text>
 
           {/* Name Input */}
           <View style={styles.inputSection}>
             <Text style={styles.inputLabel}>First Name</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="Enter first name"
+              placeholder=""
               value={name}
               onChangeText={setName}
               autoCapitalize="words"
@@ -101,7 +105,7 @@ const CreatePartnerStep: React.FC<CreatePartnerStepProps> = ({ onClose, onBack, 
             <Text style={styles.inputLabel}>Last Name</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="Enter last name"
+              placeholder=""
               value={lastname}
               onChangeText={setLastname}
               autoCapitalize="words"
@@ -174,7 +178,7 @@ const CreatePartnerStep: React.FC<CreatePartnerStepProps> = ({ onClose, onBack, 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
   topBarActions: {
     flexDirection: 'row',
@@ -193,51 +197,51 @@ const styles = StyleSheet.create({
   scrollContent: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingBottom: 120, // Increased space for the larger fixed button container
+  },
+  scrollContentContainer: {
+    paddingBottom: 140,
   },
   mainTitle: {
-    ...globalTextStyles.h2,
-    marginBottom: 8,
-  },
-  descriptionText: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 30,
-    lineHeight: 22,
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 24,
   },
   inputSection: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   inputLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#000000',
     marginBottom: 8,
   },
   textInput: {
-    backgroundColor: '#F5F0E8',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#333',
-    borderWidth: 1,
-    borderColor: '#E5E5E7',
+    color: '#000000',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
   },
   dropdownButton: {
-    backgroundColor: '#F5F0E8',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5E7',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   dropdownText: {
     fontSize: 16,
-    color: '#333',
+    color: '#000000',
   },
   placeholderText: {
     color: '#999',
@@ -247,26 +251,28 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
     paddingHorizontal: 20,
     paddingVertical: 30,
     paddingBottom: 40,
   },
   createButton: {
     backgroundColor: '#000000',
-    borderRadius: 12,
+    borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
   },
   disabledButton: {
-    backgroundColor: '#E5E5E7',
+    opacity: 0.5,
   },
   createButtonText: {
-    ...globalTextStyles.button,
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
     color: 'white',
   },
   disabledButtonText: {
-    color: '#999',
+    color: 'white',
   },
   modalOverlay: {
     flex: 1,
@@ -284,7 +290,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#000000',
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -299,7 +305,7 @@ const styles = StyleSheet.create({
   },
   modalOptionText: {
     fontSize: 16,
-    color: '#333',
+    color: '#000000',
   },
 });
 

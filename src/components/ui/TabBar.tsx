@@ -36,7 +36,9 @@ const TabBar: React.FC<TabBarProps> = ({ items, activeTabId, onTabPress, style, 
               accessibilityState={{ selected: isActive }}
               accessibilityLabel={item.label}
             >
-              <View style={styles.iconContainer}>{item.icon(isActive)}</View>
+              <View style={[styles.iconContainer, isActive ? styles.activeIconContainer : styles.inactiveIconContainer]}>
+                {item.icon(isActive)}
+              </View>
               <Text style={[styles.tabLabel, isActive && styles.activeTabLabel]}>
                 {item.label}
               </Text>
@@ -52,24 +54,26 @@ interface Styles {
   safeArea: ViewStyle;
   container: ViewStyle;
   tabItem: ViewStyle;
-  activeTabItem: ViewStyle; // Style for the active item wrapper
+  activeTabItem: ViewStyle;
   iconContainer: ViewStyle;
+  activeIconContainer: ViewStyle;
+  inactiveIconContainer: ViewStyle;
   tabLabel: TextStyle;
   activeTabLabel: TextStyle;
 }
 
 const styles = StyleSheet.create<Styles>({
   safeArea: {
-    backgroundColor: '#FFFFFF', // Default background, can be overridden
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
   },
   container: {
     flexDirection: 'row',
-    height: 60, // Standard tab bar height
+    height: 60,
     alignItems: 'center',
     justifyContent: 'space-around',
-    backgroundColor: '#FFFFFF', // Can be overridden by prop
+    backgroundColor: '#FFFFFF',
   },
   tabItem: {
     flex: 1,
@@ -77,20 +81,37 @@ const styles = StyleSheet.create<Styles>({
     justifyContent: 'center',
     paddingVertical: 4,
   },
-  activeTabItem: { // Subtle style for active item, e.g., slightly different background or border
-    // Example: backgroundColor: '#F0F0F0', // A very light gray for active pressed state
-    // borderRadius: 8, // if you want a more contained look for the active tab
+  activeTabItem: {
+    // Style for active item wrapper if needed
   },
   iconContainer: {
-    marginBottom: 2, // Space between icon and label
+    marginBottom: 4,
+    borderWidth: 2,
+    borderRadius: 8,
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeIconContainer: {
+    borderColor: '#000000',
+    opacity: 1,
+  },
+  inactiveIconContainer: {
+    borderColor: '#000000',
+    opacity: 0.4,
   },
   tabLabel: {
     fontSize: 10,
-    color: '#8E8E93', // Default inactive label color (iOS style gray)
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#000000',
+    opacity: 0.4,
   },
   activeTabLabel: {
-    color: '#007AFF', // Default active label color (iOS style blue)
-    fontWeight: '500',
+    color: '#000000',
+    opacity: 1,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
   },
 });
 

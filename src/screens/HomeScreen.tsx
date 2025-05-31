@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, StatusBar, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, StatusBar, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronRight, User, Users } from 'lucide-react-native';
+import { ChevronRight, User, Users, Calendar, Search } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
 
 // Import your custom components
-import TopBar from '../components/ui/TopBar';
 import ListItem from '../components/ui/ListItem';
+
+// Import colors
+import { COLORS } from '../constants/colors';
+
 import { Profile } from '../lib/supabase';
 
 // Import game service and types
@@ -23,10 +27,26 @@ interface HomeScreenProps {
   refreshTrigger?: number;
 }
 
+const ICON_SIZE_AVATAR = 20;
+
 const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSchedules, onNavigateToGames, onSchedulePressFromHome, refreshTrigger }) => {
   const [upcomingGames, setUpcomingGames] = useState<UserGame[]>([]);
   const [userSchedules, setUserSchedules] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigation = useNavigation();
+
+  // Placeholder images for different game types (same as GamesScreen)
+  const singlePlayerImages = [
+    'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+    'https://images.unsplash.com/photo-1494790108755-2616b612b510?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+    'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+  ];
+
+  const doublePlayerImages = [
+    'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+    'https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+  ];
 
   useEffect(() => {
     loadUpcomingGames();
@@ -61,12 +81,28 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
   };
 
   const handleUpcomingGamePress = (gameId: string) => {
-    console.log(`Upcoming game pressed: ${gameId}`);
-    // TODO: Navigate to game details
+    const game = upcomingGames.find(g => g.id === gameId);
+    if (game) {
+      (navigation as any).navigate('UpcomingDetails', { 
+        game,
+        onRefresh: () => {
+          loadUpcomingGames();
+        }
+      });
+    }
   };
 
   const handleSchedulePress = (scheduleId: string) => {
-    onSchedulePressFromHome?.(scheduleId);
+    const schedule = userSchedules.find(s => s.id === scheduleId);
+    if (schedule) {
+      (navigation as any).navigate('ScheduleDetails', { 
+        schedule,
+        user,
+        onRefresh: () => {
+          loadUpcomingGames();
+        }
+      });
+    }
   };
 
   const handleSeeAllUpcoming = () => {
@@ -79,60 +115,90 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
     onNavigateToSchedules?.();
   };
 
-  // Generate user initials for avatar
-  const getUserInitials = () => {
-    if (profile?.first_name && profile?.last_name) {
-      return `${profile.first_name.charAt(0)}${profile.last_name.charAt(0)}`;
-    }
-    return 'U';
-  };
-
-  const renderUpcomingGame = (game: UserGame) => {
+  const renderUpcomingGame = (game: UserGame, index: number) => {
     const dateTime = gameService.formatGameDateTime(game.date, game.time);
-    const initials = gameService.getUserInitials(game.opponent_name);
     
-    // Use shared color logic from gameService
-    const avatarBackgroundColor = gameService.getAvatarBackgroundColor(game.game_type);
+    // Create chips array with level, date, and location (same as GamesScreen)
+    const chips = [
+      game.opponent_level || 'Beginner', // Level
+      dateTime, // Date and time
+      game.location || 'TBD', // Location
+    ];
     
+    // Define chip background colors based on game status (upcoming games use colored backgrounds)
+    const chipBackgrounds = [
+      'rgba(255, 255, 255, 0.3)', // White with 30% opacity for upcoming games
+      'rgba(255, 255, 255, 0.3)', // White with 30% opacity for upcoming games
+      'rgba(255, 255, 255, 0.3)', // White with 30% opacity for upcoming games
+    ];
+
+    // Select appropriate image based on game type and index (same as GamesScreen)
+    const imageUrl = game.game_type === 'singles' 
+      ? singlePlayerImages[index % singlePlayerImages.length]
+      : doublePlayerImages[index % doublePlayerImages.length];
+
+    // Create avatar with profile picture placeholder
     const avatarIcon = (
-      <View style={[styles.avatarContainer, { backgroundColor: avatarBackgroundColor }]}>
-        <Text style={styles.avatarText}>{initials}</Text>
+      <View style={styles.avatarContainer}>
+        <Image
+          source={{ uri: imageUrl }}
+          style={styles.avatarImage}
+        />
       </View>
     );
+
+    // Define list item style with conditional background color (same as GamesScreen)
+    const listItemStyle = {
+      ...styles.listItem,
+      backgroundColor: game.game_type === 'singles' ? '#96BE6B' : '#4DAAC2'
+    };
 
     return (
       <ListItem
         key={game.id}
         title={game.opponent_name}
-        description={`${dateTime} • ${game.location}`}
+        chips={chips}
+        chipBackgrounds={chipBackgrounds}
         avatarIcon={avatarIcon}
         rightElement={<ChevronRight size={16} color="#888" />}
         onPress={() => handleUpcomingGamePress(game.id)}
-        style={styles.listItem}
+        style={listItemStyle}
       />
     );
   };
 
-  const renderSchedule = (schedule: Game) => {
+  const renderSchedule = (schedule: Game, index: number) => {
     const dateTime = gameService.formatGameDateTime(schedule.date, schedule.time);
     
-    // Choose icon based on game type - use gray Avatar like SchedulesScreen
-    const avatarIcon = schedule.game_type === 'singles' ? (
-      <User size={20} color="rgba(0, 0, 0, 0.5)" />
-    ) : (
-      <Users size={20} color="rgba(0, 0, 0, 0.5)" />
+    // Create chips array similar to SchedulesScreen
+    const gameTypeCapitalized = schedule.game_type.charAt(0).toUpperCase() + schedule.game_type.slice(1);
+    const skillLevelCapitalized = schedule.skill_level.charAt(0).toUpperCase() + schedule.skill_level.slice(1);
+    
+    const chips = [
+      gameTypeCapitalized, // Game type
+      skillLevelCapitalized, // Level
+      schedule.location, // Location
+    ];
+    
+    // Define chip background colors based on game type (same as SchedulesScreen)
+    const chipBackgrounds = [
+      schedule.game_type === 'singles' ? '#96BE6B' : '#4DAAC2', // Game type chip - green for singles, blue for doubles
+      'rgba(0, 0, 0, 0.07)', // Level chip (default)
+      'rgba(0, 0, 0, 0.07)', // Location chip (default)
+    ];
+    
+    // Always use Calendar icon for schedules (same as SchedulesScreen)
+    const avatarIcon = (
+      <Calendar size={ICON_SIZE_AVATAR} color="#000000" />
     );
 
     return (
       <ListItem
         key={schedule.id}
         title={dateTime}
-        description={`${schedule.game_type} • ${schedule.skill_level} • ${schedule.location}`}
-        avatarIcon={
-          <View style={styles.avatarContainer}>
-            {avatarIcon}
-          </View>
-        }
+        chips={chips}
+        chipBackgrounds={chipBackgrounds}
+        avatarIcon={avatarIcon}
         rightElement={<ChevronRight size={16} color="#888" />}
         onPress={() => handleSchedulePress(schedule.id)}
         style={styles.listItem}
@@ -163,9 +229,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}> 
       <StatusBar barStyle="dark-content" />
-      <TopBar
-        title={`Welcome, ${profile?.first_name || 'User'}`}
-      />
+      <View style={styles.headerContainer}>
+        <Text style={styles.title}>{`Welcome, ${profile?.first_name || 'User'}`}</Text>
+      </View>
       <ScrollView style={styles.scrollViewContainer} contentContainerStyle={styles.scrollViewContent}>
         
         {/* Upcoming Games Section */}
@@ -175,7 +241,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
             <Text style={styles.loadingText}>Loading games...</Text>
           </View>
         ) : displayUpcomingGames.length > 0 ? (
-          displayUpcomingGames.map(renderUpcomingGame)
+          displayUpcomingGames.map((game, index) => renderUpcomingGame(game, index))
         ) : (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No upcoming games</Text>
@@ -187,7 +253,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
         <View style={styles.sectionSpacing} />
         {renderSectionHeader('Your Schedules', handleSeeAllSchedules)}
         {displaySchedules.length > 0 ? (
-          displaySchedules.map(renderSchedule)
+          displaySchedules.map((schedule, index) => renderSchedule(schedule, index))
         ) : (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No upcoming schedules</Text>
@@ -203,7 +269,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+  },
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  title: {
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
   },
   scrollViewContainer: {
     flex: 1,
@@ -221,10 +298,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   sectionTitle: {
-    fontFamily: fontFamily.bold,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
   },
   seeAllButton: {
     flexDirection: 'row',
@@ -242,14 +319,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#ECD8A5',
-    justifyContent: 'center',
-    alignItems: 'center',
+    overflow: 'hidden',
   },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
   },
   loadingContainer: {
     padding: 20,

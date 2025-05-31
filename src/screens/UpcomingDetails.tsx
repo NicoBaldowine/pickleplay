@@ -1,10 +1,14 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, Text, StatusBar, TouchableOpacity, Linking, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, StatusBar, TouchableOpacity, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, User, Users, MapPin, Clock, Star, Phone } from 'lucide-react-native';
+import { ArrowLeft, User, Clock, MapPin, Zap, FileText } from 'lucide-react-native';
 
 // Import custom components
 import TopBar from '../components/ui/TopBar';
+import ListItem from '../components/ui/ListItem';
+
+// Import colors
+import { COLORS } from '../constants/colors';
 
 // Import game service and types
 import { UserGame, gameService } from '../services/gameService';
@@ -17,6 +21,13 @@ interface UpcomingDetailsProps {
 
 const UpcomingDetails: React.FC<UpcomingDetailsProps> = ({ game, onBack, onCancelGame }) => {
   const formattedDateTime = gameService.formatGameDateTime(game.date, game.time);
+
+  // Placeholder images for profile pictures
+  const playerImages = [
+    'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+    'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+  ];
 
   const handleCancelGame = () => {
     Alert.alert(
@@ -39,142 +50,108 @@ const UpcomingDetails: React.FC<UpcomingDetailsProps> = ({ game, onBack, onCance
     );
   };
 
-  const handleCallOpponent = () => {
-    // Mock phone number for demo - in real app this would come from user profile
-    const phoneNumber = '+1234567890';
-    Linking.openURL(`tel:${phoneNumber}`);
-  };
+  // Player profile picture
+  const playerAvatarIcon = (
+    <View style={styles.playerPictureContainer}>
+      <Image
+        source={{ uri: playerImages[0] }}
+        style={styles.playerPicture}
+      />
+    </View>
+  );
 
-  const renderGameTypeInfo = () => {
+  // Player information and background color based on game type
+  const getPlayerInfo = () => {
     if (game.game_type === 'singles') {
-      return (
-        <View style={styles.playerSection}>
-          <View style={styles.playerHeader}>
-            <User size={24} color="#007AFF" />
-            <Text style={styles.playerHeaderText}>Singles Match</Text>
-          </View>
-          <View style={styles.playerInfo}>
-            <Text style={styles.playerName}>{game.opponent_name}</Text>
-            <Text style={styles.playerLevel}>Level: {game.opponent_level}</Text>
-            
-            {/* Contact Info */}
-            <TouchableOpacity style={styles.contactButton} onPress={handleCallOpponent}>
-              <Phone size={16} color="#007AFF" />
-              <Text style={styles.contactButtonText}>Call Player</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      );
+      return {
+        title: 'Opponent',
+        chip: game.opponent_name,
+        backgroundColor: '#96BE6B' // Green for singles
+      };
     } else {
-      // For doubles, show team info
-      const teamMembers = game.opponent_name.includes('&') 
-        ? game.opponent_name.split(' & ')
-        : [game.opponent_name];
-
-      return (
-        <View style={styles.playerSection}>
-          <View style={styles.playerHeader}>
-            <Users size={24} color="#007AFF" />
-            <Text style={styles.playerHeaderText}>Doubles Match</Text>
-          </View>
-          <View style={styles.playerInfo}>
-            {teamMembers.map((member, index) => (
-              <View key={index} style={styles.teamMember}>
-                <Text style={styles.playerName}>{member.trim()}</Text>
-                <Text style={styles.playerLevel}>Level: {game.opponent_level}</Text>
-              </View>
-            ))}
-            
-            {/* Contact Info */}
-            <TouchableOpacity style={styles.contactButton} onPress={handleCallOpponent}>
-              <Phone size={16} color="#007AFF" />
-              <Text style={styles.contactButtonText}>Call Team</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      );
+      return {
+        title: 'Opponent',
+        chip: game.opponent_name,
+        backgroundColor: '#4DAAC2' // Blue for doubles
+      };
     }
   };
+
+  const playerInfo = getPlayerInfo();
 
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}>
       <StatusBar barStyle="dark-content" />
       
-      {/* Use TopBar instead of custom header */}
       <TopBar
-        title={formattedDateTime}
-        leftIcon={<ArrowLeft size={24} color="#007AFF" />}
+        title="Upcoming Game"
+        leftIcon={<ArrowLeft size={24} color="#000000" />}
         onLeftIconPress={onBack}
+        rightIcon={
+          <Text style={styles.cancelText}>Cancel</Text>
+        }
+        onRightIconPress={handleCancelGame}
+        style={styles.topBar}
+        titleContainerStyle={styles.titleContainer}
+        titleStyle={styles.titleStyle}
       />
 
       <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
-        {/* Game Type and Player Info */}
-        {renderGameTypeInfo()}
+        {/* Opponent Section */}
+        <ListItem
+          title={playerInfo.title}
+          chips={[playerInfo.chip]}
+          chipBackgrounds={['rgba(255, 255, 255, 0.3)']}
+          avatarIcon={playerAvatarIcon}
+          style={{
+            ...styles.listItem,
+            backgroundColor: playerInfo.backgroundColor
+          }}
+        />
 
-        {/* Location Info */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoRow}>
-            <MapPin size={20} color="#666" />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Location</Text>
-              <Text style={styles.infoValue}>{game.location}</Text>
-              {game.original_game.court_number && (
-                <Text style={styles.infoSubValue}>{game.original_game.court_number}</Text>
-              )}
-            </View>
-          </View>
-        </View>
+        {/* Date & Time Section */}
+        <ListItem
+          title="Date & Time"
+          chips={[formattedDateTime]}
+          chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
+          avatarIcon={<Clock size={20} color="#000000" />}
+          style={styles.listItem}
+        />
 
-        {/* Time Info */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoRow}>
-            <Clock size={20} color="#666" />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Time</Text>
-              <Text style={styles.infoValue}>{formattedDateTime}</Text>
-            </View>
-          </View>
-        </View>
+        {/* Location Section */}
+        <ListItem
+          title="Location"
+          chips={[game.location || 'TBD']}
+          chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
+          avatarIcon={<MapPin size={20} color="#000000" />}
+          style={styles.listItem}
+        />
 
-        {/* Skill Level */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoRow}>
-            <Star size={20} color="#666" />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Skill Level</Text>
-              <Text style={styles.infoValue}>{game.original_game.skill_level}</Text>
-            </View>
-          </View>
-        </View>
+        {/* Level Section */}
+        <ListItem
+          title="Level"
+          chips={[game.opponent_level || 'Beginner']}
+          chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
+          avatarIcon={<Zap size={20} color="#000000" />}
+          style={styles.listItem}
+        />
 
-        {/* Notes */}
-        {game.original_game.notes && (
-          <View style={styles.notesSection}>
-            <Text style={styles.notesLabel}>Notes</Text>
-            <View style={styles.notesContainer}>
-              <Text style={styles.notesText}>{game.original_game.notes}</Text>
-            </View>
-          </View>
+        {/* Notes Section */}
+        {game.original_game?.notes && (
+          <ListItem
+            title="Game Notes"
+            chips={[game.original_game.notes]}
+            chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
+            avatarIcon={<FileText size={20} color="#000000" />}
+            style={styles.listItem}
+          />
         )}
-
-        {/* Contact Information */}
-        <View style={styles.contactSection}>
-          <Text style={styles.contactSectionTitle}>Contact Information</Text>
-          <View style={styles.contactInfo}>
-            <Phone size={20} color="#666" />
-            <View style={styles.contactTextContainer}>
-              <Text style={styles.contactLabel}>Phone</Text>
-              <Text style={styles.contactValue}>+1 (234) 567-8900</Text>
-              <Text style={styles.contactSubtext}>Tap "Call Player" to contact</Text>
-            </View>
-          </View>
-        </View>
       </ScrollView>
 
-      {/* Cancel Game Button */}
+      {/* Text Player Button */}
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.cancelButton} onPress={handleCancelGame}>
-          <Text style={styles.cancelButtonText}>Cancel Game</Text>
+        <TouchableOpacity style={styles.textButton} onPress={() => console.log(`Text ${game.opponent_name}`)}>
+          <Text style={styles.textButtonText}>Text {game.opponent_name}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -184,165 +161,67 @@ const UpcomingDetails: React.FC<UpcomingDetailsProps> = ({ game, onBack, onCance
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+  },
+  topBar: {
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+  },
+  titleContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleStyle: {
+    fontSize: 20,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#000000',
+    textAlign: 'center',
+  },
+  cancelText: {
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#000000',
   },
   scrollContainer: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
+    paddingBottom: 32,
   },
-  playerSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  playerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  listItem: {
     marginBottom: 12,
   },
-  playerHeaderText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginLeft: 8,
+  playerPictureContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
   },
-  playerInfo: {
-    paddingLeft: 32,
-  },
-  playerName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 4,
-  },
-  playerLevel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-  },
-  teamMember: {
-    marginBottom: 8,
-  },
-  contactButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F8FF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-  },
-  contactButtonText: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 6,
-  },
-  infoSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  infoTextContainer: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  infoSubValue: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  notesSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  notesLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  notesContainer: {
-    backgroundColor: '#F5F0E8',
-    borderRadius: 8,
-    padding: 12,
-  },
-  notesText: {
-    fontSize: 14,
-    color: '#333',
-    lineHeight: 20,
-  },
-  contactSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  contactSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  contactInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  contactTextContainer: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  contactLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  contactValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 2,
-  },
-  contactSubtext: {
-    fontSize: 12,
-    color: '#888',
+  playerPicture: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
   },
   buttonContainer: {
     padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5E7',
+    paddingBottom: 32,
   },
-  cancelButton: {
-    backgroundColor: '#FF3B30',
-    borderRadius: 12,
+  textButton: {
+    backgroundColor: '#000000',
+    borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  cancelButtonText: {
+  textButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
     color: '#FFFFFF',
   },
 });

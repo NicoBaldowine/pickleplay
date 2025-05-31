@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, StatusBar, ActivityIndicator, RefreshControl, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { User, Users, Info, ChevronRight } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
 // Import custom components
-import TopBar from '../components/ui/TopBar';
 import ListItem from '../components/ui/ListItem';
-import Tabs, { TabItem } from '../components/ui/Tabs';
+
+// Import colors
+import { COLORS } from '../constants/colors';
 
 // Import game service and types
 import { gameService, UserGame } from '../services/gameService';
@@ -17,19 +18,12 @@ interface GamesScreenProps {
   refreshTrigger?: number;
 }
 
-// Tab items definition for GamesScreen
-const gameStatusTabs: TabItem[] = [
-  { id: 'upcoming', label: 'Upcoming' },
-  { id: 'past', label: 'Past' },
-];
-
 const ICON_SIZE_AVATAR = 20;
 const ICON_SIZE_CHEVRON = 16;
 const ICON_COLOR_AVATAR = '#555';
 const ICON_COLOR_CHEVRON = '#888';
 
 const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
-  const [activeGameTab, setActiveGameTab] = useState<string>('upcoming');
   const [userGames, setUserGames] = useState<UserGame[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,17 +70,60 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
     }
   };
 
-  const filteredGames = userGames.filter(game => game.status === activeGameTab);
+  // Separate games by status
+  const upcomingGames = userGames.filter(game => game.status === 'upcoming');
+  const pastGames = userGames.filter(game => game.status === 'past');
 
-  const renderGameItem = (game: UserGame) => {
+  // Placeholder images for different game types
+  const singlePlayerImages = [
+    'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', // Man with beard
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', // Young man smiling
+    'https://images.unsplash.com/photo-1494790108755-2616b612b510?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', // Woman with curly hair
+    'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', // Young woman
+    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', // Man in white shirt
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', // Woman with glasses
+  ];
+
+  const doublePlayerImages = [
+    'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', // Two people together
+    'https://images.unsplash.com/photo-1544005313-94ddf0286df2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', // Two friends
+    'https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', // Two people smiling
+    'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80', // Two women
+  ];
+
+  const renderGameItem = (game: UserGame, index: number) => {
     const dateTime = gameService.formatGameDateTime(game.date, game.time);
     
-    // Create avatar with user initials and color based on game type
-    const initials = gameService.getUserInitials(game.opponent_name);
-    const avatarBackgroundColor = gameService.getAvatarBackgroundColor(game.game_type);
+    // Create chips array with level, date, and location
+    const chips = [
+      game.opponent_level || 'Beginner', // Level
+      dateTime, // Date and time
+      game.location || 'TBD', // Location
+    ];
+    
+    // Define chip background colors based on game status
+    const chipBackgrounds = game.status === 'upcoming' ? [
+      'rgba(255, 255, 255, 0.3)', // White with 30% opacity for upcoming games
+      'rgba(255, 255, 255, 0.3)', // White with 30% opacity for upcoming games
+      'rgba(255, 255, 255, 0.3)', // White with 30% opacity for upcoming games
+    ] : [
+      'rgba(0, 0, 0, 0.07)', // Default gray for past games
+      'rgba(0, 0, 0, 0.07)', // Default gray for past games
+      'rgba(0, 0, 0, 0.07)', // Default gray for past games
+    ];
+
+    // Select appropriate image based on game type and index
+    const imageUrl = game.game_type === 'singles' 
+      ? singlePlayerImages[index % singlePlayerImages.length]
+      : doublePlayerImages[index % doublePlayerImages.length];
+
+    // Create avatar with profile picture placeholder
     const avatarIcon = (
-      <View style={[styles.avatarContainer, { backgroundColor: avatarBackgroundColor }]}>
-        <Text style={styles.avatarText}>{initials}</Text>
+      <View style={styles.avatarContainer}>
+        <Image
+          source={{ uri: imageUrl }}
+          style={styles.avatarImage}
+        />
       </View>
     );
 
@@ -101,15 +138,24 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
       <Text style={[styles.resultText, { color: '#666' }]}>Completed</Text>
     );
 
+    // Define list item style with conditional background color
+    const listItemStyle = {
+      ...styles.listItem,
+      ...(game.status === 'upcoming' && {
+        backgroundColor: game.game_type === 'singles' ? '#96BE6B' : '#4DAAC2'
+      })
+    };
+
     return (
       <ListItem
         key={game.id}
         title={game.opponent_name}
-        description={dateTime}
+        chips={chips}
+        chipBackgrounds={chipBackgrounds}
         avatarIcon={avatarIcon}
         rightElement={rightElement}
         onPress={() => handleGamePress(game.id)}
-        style={styles.listItem}
+        style={listItemStyle}
       />
     );
   };
@@ -117,18 +163,11 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
   const renderEmptyState = () => (
     <View style={styles.emptyStateContainer}>
       <View style={styles.emptyIconContainer}>
-        {activeGameTab === 'upcoming' ? (
-          <User size={48} color="#CCC" />
-        ) : (
-          <Users size={48} color="#CCC" />
-        )}
+        <Users size={48} color="#CCC" />
       </View>
-      <Text style={styles.emptyStateTitle}>No {activeGameTab} games</Text>
+      <Text style={styles.emptyStateTitle}>No games yet</Text>
       <Text style={styles.emptyStateDescription}>
-        {activeGameTab === 'upcoming' 
-          ? 'You haven\'t accepted any games yet. Go to Find to discover games!'
-          : 'No completed games to show.'
-        }
+        You haven't accepted any games yet. Go to Find to discover games!
       </Text>
     </View>
   );
@@ -155,16 +194,10 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}>
       <StatusBar barStyle="dark-content" />
-      <TopBar
-        title="My Games"
-        description="Your scheduled and completed games"
-      />
-      <Tabs 
-        items={gameStatusTabs} 
-        activeTabId={activeGameTab} 
-        onTabPress={setActiveGameTab} 
-        style={styles.tabsContainer} 
-      />
+      <View style={styles.headerContainer}>
+        <Text style={styles.title}>My Games</Text>
+        <Text style={styles.subtitle}>Upcoming and past games</Text>
+      </View>
       <ScrollView 
         style={styles.scrollViewContainer} 
         contentContainerStyle={styles.scrollViewContent}
@@ -180,8 +213,32 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
           renderLoadingState()
         ) : error ? (
           renderErrorState()
-        ) : filteredGames.length > 0 ? (
-          filteredGames.map(renderGameItem)
+        ) : userGames.length > 0 ? (
+          <>
+            {/* Upcoming Games Section */}
+            {upcomingGames.length > 0 && (
+              <>
+                <View style={styles.sectionHeaderContainer}>
+                  <Text style={styles.sectionTitle}>Upcoming Games</Text>
+                </View>
+                <View style={styles.gamesListContainer}>
+                  {upcomingGames.map((game, index) => renderGameItem(game, index))}
+                </View>
+              </>
+            )}
+
+            {/* Past Games Section */}
+            {pastGames.length > 0 && (
+              <>
+                <View style={styles.sectionHeaderContainer}>
+                  <Text style={styles.sectionTitle}>Past Games</Text>
+                </View>
+                <View style={styles.gamesListContainer}>
+                  {pastGames.map((game, index) => renderGameItem(game, index))}
+                </View>
+              </>
+            )}
+          </>
         ) : (
           renderEmptyState()
         )}
@@ -193,21 +250,48 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
-  tabsContainer: {
-    marginHorizontal: 16,
-    marginTop: 4,
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  title: {
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 2,
+  },
+  subtitle: {
+    fontSize: 14,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_SECONDARY,
   },
   scrollViewContainer: {
     flex: 1,
-    marginTop: 4,
   },
   scrollViewContent: {
     paddingHorizontal: 16,
     paddingTop: 4,
     paddingBottom: 8,
     flexGrow: 1,
+  },
+  sectionHeaderContainer: {
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 0,
+  },
+  gamesListContainer: {
+    marginBottom: 16,
   },
   listItem: {
     marginBottom: 8,
@@ -218,11 +302,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
   },
   resultText: {
     fontSize: 14,

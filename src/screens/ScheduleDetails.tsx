@@ -1,10 +1,14 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, Text, StatusBar, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, User, Users, MapPin, Clock, Star, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, User, Clock, MapPin, Zap, FileText } from 'lucide-react-native';
 
 // Import custom components
 import TopBar from '../components/ui/TopBar';
+import ListItem from '../components/ui/ListItem';
+
+// Import colors
+import { COLORS } from '../constants/colors';
 
 // Import game service and types
 import { Game, gameService } from '../services/gameService';
@@ -18,17 +22,17 @@ interface ScheduleDetailsProps {
 const ScheduleDetails: React.FC<ScheduleDetailsProps> = ({ schedule, onBack, onDeleteSchedule }) => {
   const formattedDateTime = gameService.formatGameDateTime(schedule.date, schedule.time);
 
-  const handleDeleteSchedule = () => {
+  const handleCancelSchedule = () => {
     Alert.alert(
-      'Delete Schedule',
-      'Are you sure you want to delete this schedule? This action cannot be undone.',
+      'Cancel Schedule',
+      'Are you sure you want to cancel this schedule? This action cannot be undone.',
       [
         {
-          text: 'Cancel',
+          text: 'Keep Schedule',
           style: 'cancel',
         },
         {
-          text: 'Delete',
+          text: 'Cancel Schedule',
           style: 'destructive',
           onPress: () => onDeleteSchedule(schedule.id),
         },
@@ -36,111 +40,76 @@ const ScheduleDetails: React.FC<ScheduleDetailsProps> = ({ schedule, onBack, onD
     );
   };
 
-  const renderGameTypeInfo = () => {
-    if (schedule.game_type === 'singles') {
-      return (
-        <View style={styles.playerSection}>
-          <View style={styles.playerHeader}>
-            <User size={24} color="#007AFF" />
-            <Text style={styles.playerHeaderText}>Singles Match</Text>
-          </View>
-          <View style={styles.playerInfo}>
-            <Text style={styles.playerName}>{schedule.creator_name}</Text>
-            <Text style={styles.playerLevel}>Level: {schedule.creator_level}</Text>
-          </View>
-        </View>
-      );
-    } else {
-      return (
-        <View style={styles.playerSection}>
-          <View style={styles.playerHeader}>
-            <Users size={24} color="#007AFF" />
-            <Text style={styles.playerHeaderText}>Doubles Match</Text>
-          </View>
-          <View style={styles.playerInfo}>
-            <Text style={styles.playerName}>{schedule.creator_name}</Text>
-            <Text style={styles.playerLevel}>Level: {schedule.creator_level}</Text>
-            {schedule.partner_name ? (
-              <>
-                <Text style={styles.playerName}>{schedule.partner_name}</Text>
-                <Text style={styles.playerLevel}>Level: {schedule.partner_level}</Text>
-              </>
-            ) : (
-              <Text style={styles.needPartnerText}>Looking for a partner</Text>
-            )}
-          </View>
-        </View>
-      );
-    }
-  };
+  // Game type chip
+  const gameTypeChip = schedule.game_type.charAt(0).toUpperCase() + schedule.game_type.slice(1);
+  const gameTypeChipBackground = schedule.game_type === 'singles' ? '#96BE6B' : '#4DAAC2';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}>
       <StatusBar barStyle="dark-content" />
       
-      {/* Use TopBar instead of custom header */}
       <TopBar
-        title={formattedDateTime}
-        leftIcon={<ArrowLeft size={24} color="#007AFF" />}
+        title="Scheduled Game"
+        leftIcon={<ArrowLeft size={24} color="#000000" />}
         onLeftIconPress={onBack}
+        style={styles.topBar}
+        titleContainerStyle={styles.titleContainer}
+        titleStyle={styles.titleStyle}
       />
 
       <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
-        {/* Game Type and Player Info */}
-        {renderGameTypeInfo()}
+        {/* Type Section */}
+        <ListItem
+          title="Type"
+          chips={[gameTypeChip]}
+          chipBackgrounds={[gameTypeChipBackground]}
+          avatarIcon={<User size={20} color="#000000" />}
+          style={styles.listItem}
+        />
 
-        {/* Location Info */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoRow}>
-            <MapPin size={20} color="#666" />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Location</Text>
-              <Text style={styles.infoValue}>{schedule.location}</Text>
-              {schedule.court_number && (
-                <Text style={styles.infoSubValue}>{schedule.court_number}</Text>
-              )}
-            </View>
-          </View>
-        </View>
+        {/* Time Section */}
+        <ListItem
+          title="Time"
+          chips={[formattedDateTime]}
+          chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
+          avatarIcon={<Clock size={20} color="#000000" />}
+          style={styles.listItem}
+        />
 
-        {/* Time Info */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoRow}>
-            <Clock size={20} color="#666" />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Time</Text>
-              <Text style={styles.infoValue}>{formattedDateTime}</Text>
-            </View>
-          </View>
-        </View>
+        {/* Locations Section */}
+        <ListItem
+          title="Locations"
+          chips={[schedule.location]}
+          chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
+          avatarIcon={<MapPin size={20} color="#000000" />}
+          style={styles.listItem}
+        />
 
-        {/* Skill Level */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoRow}>
-            <Star size={20} color="#666" />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Skill Level</Text>
-              <Text style={styles.infoValue}>{schedule.skill_level}</Text>
-            </View>
-          </View>
-        </View>
+        {/* Level Section */}
+        <ListItem
+          title="Level"
+          chips={[schedule.skill_level]}
+          chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
+          avatarIcon={<Zap size={20} color="#000000" />}
+          style={styles.listItem}
+        />
 
-        {/* Notes */}
-        {schedule.notes && (
-          <View style={styles.notesSection}>
-            <Text style={styles.notesLabel}>Notes</Text>
-            <View style={styles.notesContainer}>
-              <Text style={styles.notesText}>{schedule.notes}</Text>
-            </View>
-          </View>
+        {/* My Notes Section */}
+        {schedule.notes && schedule.notes.trim().length > 0 && (
+          <ListItem
+            title="My Notes"
+            chips={[schedule.notes]}
+            chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
+            avatarIcon={<FileText size={20} color="#000000" />}
+            style={styles.listItem}
+          />
         )}
       </ScrollView>
 
-      {/* Delete Schedule Button */}
+      {/* Cancel Schedule Button */}
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteSchedule}>
-          <Trash2 size={20} color="#FFFFFF" />
-          <Text style={styles.deleteButtonText}>Delete Schedule</Text>
+        <TouchableOpacity style={styles.cancelButton} onPress={handleCancelSchedule}>
+          <Text style={styles.cancelButtonText}>Cancel Schedule</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -150,121 +119,51 @@ const ScheduleDetails: React.FC<ScheduleDetailsProps> = ({ schedule, onBack, onD
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+  },
+  topBar: {
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+  },
+  titleContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleStyle: {
+    fontSize: 20,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#000000',
+    textAlign: 'center',
   },
   scrollContainer: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
+    paddingBottom: 32,
   },
-  playerSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  playerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  listItem: {
     marginBottom: 12,
-  },
-  playerHeaderText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginLeft: 8,
-  },
-  playerInfo: {
-    paddingLeft: 32,
-  },
-  playerName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 4,
-  },
-  playerLevel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-  },
-  needPartnerText: {
-    fontSize: 14,
-    color: '#FF9500',
-    fontStyle: 'italic',
-    marginTop: 8,
-  },
-  infoSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  infoTextContainer: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  infoSubValue: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  notesSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  notesLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  notesContainer: {
-    backgroundColor: '#F5F0E8',
-    borderRadius: 8,
-    padding: 12,
-  },
-  notesText: {
-    fontSize: 14,
-    color: '#333',
-    lineHeight: 20,
   },
   buttonContainer: {
     padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5E7',
+    paddingBottom: 32,
   },
-  deleteButton: {
-    backgroundColor: '#FF3B30',
-    borderRadius: 12,
+  cancelButton: {
+    backgroundColor: '#000000',
+    borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
-    flexDirection: 'row',
     justifyContent: 'center',
   },
-  deleteButtonText: {
+  cancelButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
     color: '#FFFFFF',
-    marginLeft: 8,
   },
 });
 

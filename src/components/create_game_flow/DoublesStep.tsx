@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { ArrowLeft, X, User, ChevronRight, Plus } from 'lucide-react-native';
 import ListItem from '../ui/ListItem';
 import { globalTextStyles } from '../../styles/globalStyles';
+import { COLORS } from '../../constants/colors';
 
 interface DoublesStepProps {
   onClose: () => void;
@@ -14,9 +15,10 @@ interface DoublesStepProps {
 const ICON_SIZE_ACTION = 24;
 const ICON_SIZE_AVATAR = 20;
 const ICON_SIZE_CHEVRON = 18;
-const ICON_COLOR_DARK = '#333';
+const ICON_COLOR_DARK = '#000000';
 const ICON_COLOR_MEDIUM = '#888';
 const ICON_COLOR_BLUE = '#007AFF';
+const STROKE_WIDTH_STANDARD = 1.8;
 
 // Dummy saved partners (in a real app, this would come from user's saved partners)
 const savedPartners = [
@@ -42,18 +44,15 @@ const DoublesStep: React.FC<DoublesStepProps> = ({ onClose, onBack, onSelectPart
       </View>
 
       <Text style={styles.mainTitle}>Your Doubles Partner</Text>
-      <Text style={styles.descriptionText}>
-        Who will be playing with you? Create a new partner or select from your saved partners.
-      </Text>
 
       {/* Create new partner option */}
       <View style={styles.createPartnerSection}>
         <ListItem
-          avatarIcon={<Plus size={ICON_SIZE_AVATAR} color={ICON_COLOR_MEDIUM} />}
+          avatarIcon={<Plus size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />}
           title="Create a new partner"
           onPress={onCreateNewPartner}
           rightElement={<ChevronRight size={ICON_SIZE_CHEVRON} color={ICON_COLOR_MEDIUM} />}
-          style={styles.createPartnerItem}
+          style={styles.listItem}
         />
       </View>
 
@@ -80,7 +79,7 @@ const DoublesStep: React.FC<DoublesStepProps> = ({ onClose, onBack, onSelectPart
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
     paddingHorizontal: 20,
     paddingTop: 20,
   },
@@ -97,32 +96,31 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   mainTitle: {
-    ...globalTextStyles.h2,
-    marginBottom: 30,
-  },
-  descriptionText: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 30,
-    lineHeight: 22,
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 24,
   },
   createPartnerSection: {
     marginBottom: 30,
-  },
-  createPartnerItem: {
-    marginBottom: 8,
   },
   savedPartnersSection: {
     flex: 1,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#000000',
     marginBottom: 16,
   },
   listItem: {
     marginBottom: 12,
+    minHeight: 60,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

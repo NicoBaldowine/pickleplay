@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,16 +8,21 @@ import {
   TextInput,
   TouchableWithoutFeedback,
   Keyboard,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
 } from 'react-native';
-import { ArrowLeft, X, User, Users, Calendar, Clock, MapPin, Target } from 'lucide-react-native';
-import { GameType, PlayerLevel, Court } from './CreateGameFlow';
+import { ArrowLeft, X, User, Users, Calendar, Clock, MapPin, Zap, FileText } from 'lucide-react-native';
+import { GameType, PlayerLevel, Court, CreateGameData } from './CreateGameFlow';
 import ListItem from '../ui/ListItem';
 import { globalTextStyles } from '../../styles/globalStyles';
+import { COLORS } from '../../constants/colors';
 
 interface ReviewStepProps {
   onClose: () => void;
   onBack: () => void;
-  onScheduleGame: (notes: string) => void;
+  onScheduleGame: (notes: string, phoneNumber: string) => void;
   isSubmitting: boolean;
   gameData: {
     game_type?: GameType;
@@ -31,7 +36,7 @@ interface ReviewStepProps {
 
 const ICON_SIZE_ACTION = 24;
 const ICON_SIZE_AVATAR = 20;
-const ICON_COLOR_DARK = '#333';
+const ICON_COLOR_DARK = '#000000';
 const ICON_COLOR_MEDIUM = '#888';
 
 const ReviewStep: React.FC<ReviewStepProps> = ({
@@ -42,10 +47,67 @@ const ReviewStep: React.FC<ReviewStepProps> = ({
   gameData,
   courts,
 }) => {
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [notes, setNotes] = useState('');
+  const [phoneError, setPhoneError] = useState(false);
+  const [notesError, setNotesError] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // Phone number validation for US territory
+  const validatePhoneNumber = (phone: string) => {
+    if (phone.trim() === '') {
+      setPhoneError(false);
+      return true;
+    }
+    
+    // Remove all non-digits
+    const digits = phone.replace(/\D/g, '');
+    
+    // Check if it's a valid US phone number (10 digits or 11 with country code 1)
+    const isValid = (digits.length === 10) || (digits.length === 11 && digits.startsWith('1'));
+    setPhoneError(!isValid);
+    return isValid;
+  };
+
+  // Notes character limit validation
+  const validateNotes = (text: string) => {
+    const isValid = text.length <= 100;
+    setNotesError(!isValid);
+    return isValid;
+  };
+
+  const handlePhoneChange = (text: string) => {
+    setPhoneNumber(text);
+  };
+
+  const handlePhoneBlur = () => {
+    validatePhoneNumber(phoneNumber);
+  };
+
+  const handleNotesChange = (text: string) => {
+    setNotes(text);
+    validateNotes(text);
+  };
 
   const handleScheduleGame = () => {
-    onScheduleGame(notes);
+    if (!phoneNumber.trim()) {
+      Alert.alert('Phone Required', 'Please enter your phone number to continue.');
+      return;
+    }
+
+    if (phoneError || notesError) {
+      Alert.alert('Invalid Input', 'Please fix the errors before continuing.');
+      return;
+    }
+
+    onScheduleGame(notes.trim() || '', phoneNumber.trim());
+  };
+
+  const handleNotesFocus = () => {
+    // Scroll to the bottom when notes field is focused to ensure it's visible
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
   };
 
   const dismissKeyboard = () => {
@@ -85,6 +147,9 @@ const ReviewStep: React.FC<ReviewStepProps> = ({
     return level.charAt(0).toUpperCase() + level.slice(1);
   };
 
+  // Check if button should be active
+  const isButtonActive = phoneNumber.trim().length > 0 && !phoneError && !notesError && !isSubmitting;
+
   return (
     <TouchableWithoutFeedback onPress={dismissKeyboard}>
       <View style={styles.container}>
@@ -97,20 +162,27 @@ const ReviewStep: React.FC<ReviewStepProps> = ({
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContentContainer}>
-          <Text style={styles.mainTitle}>Review Your Game</Text>
-          <Text style={styles.descriptionText}>
-            Review the details below and add any notes before scheduling your game.
-          </Text>
+        <KeyboardAvoidingView 
+          style={styles.keyboardAvoidingView}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <ScrollView 
+            ref={scrollViewRef}
+            style={styles.scrollContent} 
+            contentContainerStyle={styles.scrollContentContainer}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.mainTitle}>Review Game</Text>
 
-          {/* Game Summary Section */}
-          <View style={styles.summaryContainer}>
-            <Text style={styles.sectionTitle}>Game Details</Text>
-            
-            {/* Game Type */}
+            {/* Game Type with Partner if doubles */}
             <ListItem
-              title="Game Type"
-              description={formatGameType(gameData.game_type)}
+              title={gameData.game_type === 'doubles' && gameData.partner_name 
+                ? `${formatGameType(gameData.game_type)} with ${gameData.partner_name}`
+                : formatGameType(gameData.game_type)
+              }
+              chips={[formatPlayerLevel(gameData.player_level)]}
+              chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
               avatarIcon={gameData.game_type === 'singles' ? (
                 <User size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />
               ) : (
@@ -119,74 +191,77 @@ const ReviewStep: React.FC<ReviewStepProps> = ({
               style={styles.listItem}
             />
 
-            {/* Partner (if doubles) */}
-            {gameData.game_type === 'doubles' && gameData.partner_name && (
-              <ListItem
-                title="Partner"
-                description={gameData.partner_name}
-                avatarIcon={<User size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />}
-                style={styles.listItem}
-              />
-            )}
-
-            {/* Skill Level */}
-            <ListItem
-              title="Skill Level"
-              description={formatPlayerLevel(gameData.player_level)}
-              avatarIcon={<Target size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />}
-              style={styles.listItem}
-            />
-
             {/* Location */}
             <ListItem
-              title="Location"
-              description={courtName}
+              title={courtName}
               avatarIcon={<MapPin size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />}
-              style={styles.listItem}
+              style={styles.infoListItem}
             />
 
             {/* Date & Time */}
             <ListItem
-              title="Date & Time"
-              description={formatDateTime(gameData.scheduled_time)}
+              title={formatDateTime(gameData.scheduled_time)}
               avatarIcon={<Calendar size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />}
-              style={styles.listItem}
+              style={styles.infoListItem}
             />
-          </View>
 
-          {/* Notes Section */}
-          <View style={styles.notesContainer}>
-            <Text style={styles.sectionTitle}>Additional Notes</Text>
-            <Text style={styles.notesDescription}>
-              Add any additional information or requirements for your game (optional).
-            </Text>
-            <TextInput
-              style={styles.notesInput}
-              placeholder="e.g., Looking for competitive players, bring your own paddle, etc."
-              placeholderTextColor="#999"
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-              maxLength={200}
-            />
-            <Text style={styles.characterCount}>{notes.length}/200</Text>
-          </View>
-        </ScrollView>
+            {/* Phone Number Field */}
+            <View style={styles.inputSection}>
+              <Text style={styles.inputLabel}>Phone number</Text>
+              <TextInput
+                style={[styles.inputField, phoneError && styles.inputFieldError]}
+                placeholder=""
+                value={phoneNumber}
+                onChangeText={handlePhoneChange}
+                onBlur={handlePhoneBlur}
+                keyboardType="phone-pad"
+                placeholderTextColor="#999"
+              />
+              {phoneError && (
+                <Text style={styles.errorText}>Invalid number</Text>
+              )}
+            </View>
 
-        {/* Schedule Game Button - Fixed at bottom */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity 
-            style={[styles.scheduleButton, isSubmitting && styles.disabledButton]} 
-            onPress={handleScheduleGame}
-            disabled={isSubmitting}
-          >
-            <Text style={[styles.scheduleButtonText, isSubmitting && styles.disabledButtonText]}>
-              {isSubmitting ? 'Scheduling Game...' : 'Schedule Game'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+            {/* Additional Notes Field */}
+            <View style={styles.inputSection}>
+              <Text style={styles.inputLabel}>Additional Notes (Optional)</Text>
+              <TextInput
+                style={[styles.inputField, styles.notesInput, notesError && styles.inputFieldError]}
+                placeholder=""
+                value={notes}
+                onChangeText={handleNotesChange}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                placeholderTextColor="#999"
+                onFocus={handleNotesFocus}
+                maxLength={120}
+              />
+              {notesError && (
+                <Text style={styles.errorText}>Characters exceeded</Text>
+              )}
+            </View>
+          </ScrollView>
+
+          {/* Schedule Game Button */}
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity 
+              style={[
+                styles.scheduleButton,
+                !isButtonActive && styles.scheduleButtonDisabled
+              ]} 
+              onPress={handleScheduleGame}
+              disabled={!isButtonActive}
+            >
+              <Text style={[
+                styles.scheduleButtonText,
+                !isButtonActive && styles.scheduleButtonTextDisabled
+              ]}>
+                {isSubmitting ? 'Scheduling Game...' : 'Schedule Game'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
       </View>
     </TouchableWithoutFeedback>
   );
@@ -195,7 +270,7 @@ const ReviewStep: React.FC<ReviewStepProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
   topBarActions: {
     flexDirection: 'row',
@@ -219,8 +294,11 @@ const styles = StyleSheet.create({
     paddingBottom: 140, // Extra space for button container
   },
   mainTitle: {
-    ...globalTextStyles.h2,
-    marginBottom: 8,
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 24,
   },
   descriptionText: {
     fontSize: 16,
@@ -250,14 +328,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   notesInput: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#333',
-    borderWidth: 1,
-    borderColor: '#E5E5E7',
     minHeight: 100,
     textAlignVertical: 'top',
   },
@@ -272,26 +342,69 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
     paddingHorizontal: 20,
     paddingVertical: 30,
     paddingBottom: 40,
   },
   scheduleButton: {
     backgroundColor: '#000000',
-    borderRadius: 12,
+    borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  disabledButton: {
-    backgroundColor: '#E5E5E7',
+  scheduleButtonDisabled: {
+    opacity: 0.5,
   },
   scheduleButtonText: {
-    ...globalTextStyles.button,
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
     color: 'white',
   },
-  disabledButtonText: {
-    color: '#999',
+  scheduleButtonTextDisabled: {
+    opacity: 0.7,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  inputSection: {
+    marginBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#000000',
+    marginBottom: 8,
+  },
+  inputField: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#000000',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+  },
+  inputFieldError: {
+    borderColor: '#FF0000',
+  },
+  errorText: {
+    color: '#FF0000',
+    fontSize: 12,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  infoListItem: {
+    marginBottom: 12,
+    minHeight: 60,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

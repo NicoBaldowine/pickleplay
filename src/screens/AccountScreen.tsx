@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight, Users, Bell, HelpCircle, MessageSquare, LogOut } from 'lucide-react-native';
-import TopBar from '../components/ui/TopBar';
+
+// Import custom components
+import ListItem from '../components/ui/ListItem';
+
+// Import colors
+import { COLORS } from '../constants/colors';
+
 import { authService } from '../services/authService';
 import { gameService } from '../services/gameService';
 import { Profile } from '../lib/supabase';
@@ -13,9 +19,12 @@ interface AccountScreenProps {
   profile: Profile;
   onSignOut: () => void;
   onBack?: () => void;
+  onNavigateToProfile?: () => void;
+  onNavigateToNotifications?: () => void;
+  onNavigateToDoublePartners?: () => void;
 }
 
-const AccountScreen: React.FC<AccountScreenProps> = ({ user, profile, onSignOut, onBack }) => {
+const AccountScreen: React.FC<AccountScreenProps> = ({ user, profile, onSignOut, onBack, onNavigateToProfile, onNavigateToNotifications, onNavigateToDoublePartners }) => {
   const [gamesPlayed, setGamesPlayed] = useState(0);
 
   useEffect(() => {
@@ -67,84 +76,117 @@ const AccountScreen: React.FC<AccountScreenProps> = ({ user, profile, onSignOut,
 
   const handlePreferencePress = (option: string) => {
     console.log(`${option} pressed`);
-    // TODO: Navigate to respective screens
+    
+    switch (option) {
+      case 'Manage Notifications':
+        onNavigateToNotifications?.();
+        break;
+      case 'Manage Doubles Partners':
+        onNavigateToDoublePartners?.();
+        break;
+      case 'Help':
+        // TODO: Navigate to Help screen
+        break;
+      case 'Feedback':
+        // TODO: Navigate to Feedback screen
+        break;
+      default:
+        break;
+    }
   };
 
-  const renderPreferenceItem = (icon: React.ReactNode, title: string, onPress: () => void) => (
-    <TouchableOpacity style={styles.preferenceItem} onPress={onPress}>
-      <View style={styles.preferenceLeft}>
-        {icon}
-        <Text style={styles.preferenceText}>{title}</Text>
-      </View>
-      <ChevronRight size={20} color="#C7C7CC" />
-    </TouchableOpacity>
+  const handleProfilePress = () => {
+    console.log('Profile pressed');
+    onNavigateToProfile?.();
+  };
+
+  // Create chips for user profile info
+  const userChips = [
+    user.email, // First line, first chip (email alone)
+    '', // First line, second chip (empty to keep email alone)
+    getSkillLevelDisplay(profile.pickleball_level), // Second line, first chip
+    `${gamesPlayed} Games`, // Second line, second chip
+  ];
+
+  // All chips with default gray background
+  const chipBackgrounds = [
+    'rgba(0, 0, 0, 0.07)', // Email chip
+    'transparent', // Transparent for empty chip
+    'rgba(0, 0, 0, 0.07)', // Skill level chip
+    'rgba(0, 0, 0, 0.07)', // Games count chip
+  ];
+
+  // Profile picture for user
+  const userAvatarIcon = (
+    <View style={styles.profilePictureContainer}>
+      <Image
+        source={{ uri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' }}
+        style={styles.profilePicture}
+      />
+    </View>
   );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}>
-      <TopBar
-        title="Account"
-        leftIcon={onBack ? <ChevronLeft size={24} color="#007AFF" /> : undefined}
-        onLeftIconPress={onBack}
-      />
+      <View style={styles.headerContainer}>
+        <Text style={styles.title}>Account</Text>
+        <Text style={styles.subtitle}>Manage your profile and preferences</Text>
+      </View>
       
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Profile Card */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatarLarge}>
-            <Text style={styles.avatarLargeText}>
-              {profile.first_name.charAt(0)}{profile.last_name.charAt(0)}
-            </Text>
-          </View>
-          
-          <View style={styles.profileInfo}>
-            <Text style={styles.userName}>{profile.full_name}</Text>
-            <Text style={styles.userLocation}>San Francisco</Text>
-            <Text style={styles.gamesPlayed}>{gamesPlayed} events attended</Text>
-            
-            <View style={styles.statsRow}>
-              <Text style={styles.statText}>2 Following</Text>
-              <Text style={styles.statText}>1 Followers</Text>
-            </View>
-          </View>
+        {/* User Profile ListItem */}
+        <View style={styles.profileListContainer}>
+          <ListItem
+            title={profile.full_name}
+            chips={userChips}
+            chipBackgrounds={chipBackgrounds}
+            avatarIcon={userAvatarIcon}
+            style={styles.profileListItem}
+            onPress={handleProfilePress}
+          />
         </View>
 
         {/* Preferences Section */}
         <View style={styles.preferencesSection}>
           <Text style={styles.sectionTitle}>Preferences</Text>
           
-          <View style={styles.preferencesContainer}>
-            {renderPreferenceItem(
-              <Users size={20} color="#666" />,
-              'Doubles Partners',
-              () => handlePreferencePress('Doubles Partners')
-            )}
+          <View style={styles.preferencesListContainer}>
+            <ListItem
+              title="Manage Notifications"
+              avatarIcon={<Bell size={20} color="#000000" />}
+              onPress={() => handlePreferencePress('Manage Notifications')}
+              style={styles.preferenceListItem}
+            />
             
-            {renderPreferenceItem(
-              <Bell size={20} color="#666" />,
-              'Manage notifications',
-              () => handlePreferencePress('Manage notifications')
-            )}
+            <ListItem
+              title="Manage Doubles Partners"
+              avatarIcon={<Users size={20} color="#000000" />}
+              onPress={() => handlePreferencePress('Manage Doubles Partners')}
+              style={styles.preferenceListItem}
+            />
             
-            {renderPreferenceItem(
-              <HelpCircle size={20} color="#666" />,
-              'Help',
-              () => handlePreferencePress('Help')
-            )}
+            <ListItem
+              title="Help"
+              avatarIcon={<HelpCircle size={20} color="#000000" />}
+              onPress={() => handlePreferencePress('Help')}
+              style={styles.preferenceListItem}
+            />
             
-            {renderPreferenceItem(
-              <MessageSquare size={20} color="#666" />,
-              'Feedback',
-              () => handlePreferencePress('Feedback')
-            )}
+            <ListItem
+              title="Feedback"
+              avatarIcon={<MessageSquare size={20} color="#000000" />}
+              onPress={() => handlePreferencePress('Feedback')}
+              style={styles.preferenceListItem}
+            />
+            
+            <ListItem
+              title="Sign out"
+              avatarIcon={<LogOut size={20} color="#000000" />}
+              onPress={handleSignOut}
+              style={styles.preferenceListItem}
+            />
           </View>
         </View>
-
-        {/* Sign Out Button */}
-        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-          <LogOut size={20} color="#FF3B30" />
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -153,127 +195,71 @@ const AccountScreen: React.FC<AccountScreenProps> = ({ user, profile, onSignOut,
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+  },
+  headerContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  title: {
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 2,
+  },
+  subtitle: {
+    fontSize: 14,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_SECONDARY,
   },
   container: {
     flex: 1,
   },
   contentContainer: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
-  profileCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 32,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+  profileListContainer: {
+    marginBottom: 24,
   },
-  avatarLarge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#000000',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
+  profileListItem: {
+    marginBottom: 8,
   },
-  avatarLargeText: {
-    ...withGlobalFont({
-      color: '#FFFFFF',
-      fontSize: 28,
-      fontWeight: '600',
-    }),
+  profilePictureContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
   },
-  profileInfo: {
-    alignItems: 'flex-start',
-  },
-  userName: {
-    ...globalTextStyles.h3,
-    marginBottom: 4,
-  },
-  userLocation: {
-    ...globalTextStyles.body,
-    color: '#666',
-    marginBottom: 4,
-  },
-  gamesPlayed: {
-    ...globalTextStyles.body,
-    color: '#666',
-    marginBottom: 12,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  statText: {
-    ...globalTextStyles.body,
-    fontWeight: '500',
+  profilePicture: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
   },
   preferencesSection: {
-    marginBottom: 32,
+    marginBottom: 12,
   },
   sectionTitle: {
-    ...globalTextStyles.h4,
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 0,
+  },
+  preferencesListContainer: {
     marginBottom: 16,
   },
-  preferencesContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  preferenceItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  preferenceListItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 8,
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  preferenceLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  preferenceText: {
-    ...globalTextStyles.body,
-    marginLeft: 12,
-  },
-  signOutButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FF3B30',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  signOutText: {
-    ...globalTextStyles.button,
-    color: '#FF3B30',
-    marginLeft: 8,
+    minHeight: 60,
   },
 });
 

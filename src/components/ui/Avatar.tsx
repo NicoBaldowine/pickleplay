@@ -63,7 +63,7 @@ interface Styles {
 
 const styles = StyleSheet.create<Styles>({
   container: {
-    backgroundColor: '#ECD8A5', // Light beige background for initials/icon fallback
+    backgroundColor: 'rgba(0, 0, 0, 0.07)', // Black with 7% opacity
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -72,7 +72,7 @@ const styles = StyleSheet.create<Styles>({
     // Styles for the image are mostly dynamic based on size
   },
   initials: {
-    color: '#FFFFFF', // White text for initials
+    color: '#000000', // Black text for initials
     fontWeight: 'bold',
   },
 });

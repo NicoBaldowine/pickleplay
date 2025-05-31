@@ -1,18 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { StyleSheet, View, Text } from 'react-native';
+import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createStackNavigator } from '@react-navigation/stack';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Home, MessageSquare, Plus, Search, Calendar, Gamepad2, Trophy, User } from 'lucide-react-native';
-import { View, Text, StyleSheet, Modal } from 'react-native';
+import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { registerRootComponent } from 'expo';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
+import { Search, Calendar, Trophy, User, Home } from 'lucide-react-native';
 
 // Import fonts
 import { fonts, fontFamily } from './src/config/fonts';
 import { globalTextStyles } from './src/styles/globalStyles';
+
+// Import colors
+import { COLORS } from './src/constants/colors';
 
 // Import the actual screens from src/screens
 import HomeScreen from './src/screens/HomeScreen';
@@ -22,7 +25,11 @@ import AccountScreen from './src/screens/AccountScreen';
 import SchedulesScreen from './src/screens/SchedulesScreen';
 import ScheduleDetails from './src/screens/ScheduleDetails';
 import FindDetails from './src/screens/FindDetails';
+import FindReview from './src/screens/FindReview';
 import UpcomingDetails from './src/screens/UpcomingDetails';
+import ProfileScreen from './src/screens/ProfileScreen';
+import ManageNotificationsScreen from './src/screens/ManageNotificationsScreen';
+import ManageDoublePartnersScreen from './src/screens/ManageDoublePartnersScreen';
 
 // Import the CreateGameFlow component
 import CreateGameFlow from './src/components/create_game_flow/CreateGameFlow';
@@ -41,10 +48,10 @@ import TopBar from './src/components/ui/TopBar';
 SplashScreen.preventAutoHideAsync();
 
 const Tab = createBottomTabNavigator();
-const MainStack = createStackNavigator();
+const MainStack = createNativeStackNavigator();
 
-const ACTIVE_COLOR = '#000000';
-const INACTIVE_COLOR = '#8E8E93';
+const ACTIVE_COLOR = COLORS.TEXT_PRIMARY;
+const INACTIVE_COLOR = COLORS.TEXT_SECONDARY;
 
 // ScheduleDetails wrapper for navigation
 function ScheduleDetailsWrapper({ route, navigation, setScheduleRefreshTrigger }: any) {
@@ -92,7 +99,7 @@ function ScheduleDetailsWrapper({ route, navigation, setScheduleRefreshTrigger }
 }
 
 // FindDetails wrapper for navigation
-function FindDetailsWrapper({ route, navigation, setGamesRefreshTrigger }: any) {
+function FindDetailsWrapper({ route, navigation, setGamesRefreshTrigger, user, profile }: any) {
   const { game } = route.params;
   
   const handleBack = () => {
@@ -131,6 +138,77 @@ function FindDetailsWrapper({ route, navigation, setGamesRefreshTrigger }: any) 
   return (
     <FindDetails
       game={game}
+      user={user}
+      profile={profile}
+      onBack={handleBack}
+      onAcceptGame={handleAcceptGame}
+    />
+  );
+}
+
+// CreateGameFlow wrapper for navigation
+function CreateGameFlowWrapper({ route, navigation, setScheduleRefreshTrigger }: any) {
+  const handleClose = () => {
+    navigation.goBack();
+  };
+
+  const handleGameCreated = (gameId: string) => {
+    console.log('Game created with ID:', gameId);
+    
+    // Trigger schedule refresh
+    setScheduleRefreshTrigger((prev: number) => prev + 1);
+    
+    // Navigate back to schedules
+    navigation.goBack();
+  };
+
+  return (
+    <CreateGameFlow 
+      onClose={handleClose} 
+      onGameCreated={handleGameCreated}
+    />
+  );
+}
+
+// FindReview wrapper for navigation
+function FindReviewWrapper({ route, navigation, setGamesRefreshTrigger, user, profile }: any) {
+  const { game, onAcceptGame } = route.params;
+  
+  const handleBack = () => {
+    navigation.goBack();
+  };
+
+  const handleAcceptGame = async (gameId: string, phoneNumber: string, notes?: string) => {
+    try {
+      const { authService } = await import('./src/services/authService');
+      const { gameService } = await import('./src/services/gameService');
+      
+      const currentUser = await authService.getCurrentUser();
+      if (currentUser) {
+        // Here you could save phone number and notes to user profile if needed
+        const result = await gameService.joinGame(gameId, currentUser.id);
+        if (result.success) {
+          console.log('Game accepted successfully!');
+          
+          // Trigger games refresh
+          setGamesRefreshTrigger((prev: number) => prev + 1);
+          
+          // Navigate to Games tab
+          navigation.navigate('TabNavigator', { screen: 'Games' });
+        } else {
+          console.error('Failed to accept game:', result.error);
+        }
+      }
+    } catch (error) {
+      console.error('Error accepting game:', error);
+    }
+  };
+
+  return (
+    <FindReview
+      game={game}
+      user={user}
+      profile={profile}
       onBack={handleBack}
       onAcceptGame={handleAcceptGame}
     />
@@ -180,8 +258,97 @@ function UpcomingDetailsWrapper({ route, navigation, setGamesRefreshTrigger }: a
   );
 }
 
+// ProfileScreen wrapper for navigation
+function ProfileScreenWrapper({ route, navigation }: any) {
+  const { user, profile, onSaveProfile } = route.params;
+  
+  const handleBack = () => {
+    navigation.goBack();
+  };
+
+  const handleSaveProfile = async (updatedProfile: Partial<Profile>) => {
+    try {
+      // TODO: Implement actual profile update logic with authService
+      console.log('Saving profile:', updatedProfile);
+      if (onSaveProfile) {
+        await onSaveProfile(updatedProfile);
+      }
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      throw error;
+    }
+  };
+
+  return (
+    <ProfileScreen
+      user={user}
+      profile={profile}
+      onBack={handleBack}
+      onSaveProfile={handleSaveProfile}
+    />
+  );
+}
+
+// ManageNotificationsScreen wrapper for navigation
+function ManageNotificationsScreenWrapper({ route, navigation }: any) {
+  const handleBack = () => {
+    navigation.goBack();
+  };
+
+  return (
+    <ManageNotificationsScreen
+      onBack={handleBack}
+    />
+  );
+}
+
+// ManageDoublePartnersScreen wrapper for navigation
+function ManageDoublePartnersScreenWrapper({ route, navigation }: any) {
+  const handleBack = () => {
+    navigation.goBack();
+  };
+
+  const handleCreateNewPartner = () => {
+    // TODO: Navigate to CreatePartnerStep or similar
+    console.log('Create new partner pressed');
+  };
+
+  const handleSelectPartner = (partnerName: string) => {
+    // TODO: Handle partner selection
+    console.log('Selected partner:', partnerName);
+  };
+
+  return (
+    <ManageDoublePartnersScreen
+      onBack={handleBack}
+      onCreateNewPartner={handleCreateNewPartner}
+      onSelectPartner={handleSelectPartner}
+    />
+  );
+}
+
 // Tab Navigator Component
-function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefreshTrigger, onNavigateToSchedules, onNavigateToGames, onSignOut }: any) {
+function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefreshTrigger, onNavigateToSchedules, onNavigateToGames, onSignOut, navigationRef }: any) {
+  
+  const handleNavigateToProfile = () => {
+    navigationRef.current?.navigate('Profile', { 
+      user, 
+      profile,
+      onSaveProfile: async (updatedProfile: Partial<Profile>) => {
+        // TODO: Implement profile update logic
+        console.log('Saving profile:', updatedProfile);
+      }
+    });
+  };
+
+  const handleNavigateToNotifications = () => {
+    navigationRef.current?.navigate('ManageNotifications');
+  };
+
+  const handleNavigateToDoublePartners = () => {
+    navigationRef.current?.navigate('ManageDoublePartners');
+  };
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -190,7 +357,9 @@ function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefres
         tabBarActiveTintColor: ACTIVE_COLOR,
         tabBarInactiveTintColor: INACTIVE_COLOR,
         tabBarLabelStyle: {
-          ...globalTextStyles.tabLabel,
+          fontSize: 10,
+          fontFamily: 'InterTight-ExtraBold',
+          fontWeight: '800',
           marginBottom: 2,
           marginTop: 2,
         },
@@ -210,7 +379,8 @@ function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefres
           tabBarIcon: ({ focused }) => (
             <Home 
               size={24} 
-              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} 
+              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR}
+              strokeWidth={2}
             />
           ),
         }}
@@ -227,13 +397,14 @@ function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefres
         )}
       </Tab.Screen>
       <Tab.Screen
-        name="Find"
+        name="Search"
         component={SearchScreen}
         options={{
           tabBarIcon: ({ focused }) => (
             <Search 
               size={24} 
-              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} 
+              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR}
+              strokeWidth={2}
             />
           ),
         }}
@@ -244,7 +415,8 @@ function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefres
           tabBarIcon: ({ focused }) => (
             <Calendar 
               size={24} 
-              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} 
+              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR}
+              strokeWidth={2}
             />
           ),
         }}
@@ -264,7 +436,8 @@ function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefres
           tabBarIcon: ({ focused }) => (
             <Trophy 
               size={24} 
-              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} 
+              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR}
+              strokeWidth={2}
             />
           ),
         }}
@@ -281,7 +454,8 @@ function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefres
           tabBarIcon: ({ focused }) => (
             <User 
               size={24} 
-              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} 
+              color={focused ? ACTIVE_COLOR : INACTIVE_COLOR}
+              strokeWidth={2}
             />
           ),
         }}
@@ -291,6 +465,9 @@ function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefres
             user={user}
             profile={profile!}
             onSignOut={onSignOut}
+            onNavigateToProfile={handleNavigateToProfile}
+            onNavigateToNotifications={handleNavigateToNotifications}
+            onNavigateToDoublePartners={handleNavigateToDoublePartners}
           />
         )}
       </Tab.Screen>
@@ -299,7 +476,6 @@ function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefres
 }
 
 export default function App() {
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<any | null>(null);
@@ -376,7 +552,7 @@ export default function App() {
   };
 
   const handleCreateGameFromSchedules = () => {
-    setShowCreateModal(true);
+    navigationRef.current?.navigate('CreateGameFlow');
   };
 
   const handleNavigateToSchedules = () => {
@@ -391,7 +567,7 @@ export default function App() {
   if (!fontsLoaded || isLoading) {
     return (
       <SafeAreaProvider>
-        <StatusBar style="dark" />
+        <ExpoStatusBar style="dark" />
         <SafeAreaView style={styles.container}>
           <View style={styles.loadingContainer}>
             <Text style={styles.loadingText}>Loading...</Text>
@@ -405,7 +581,7 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <SafeAreaProvider>
-        <StatusBar style="dark" />
+        <ExpoStatusBar style="dark" />
         <AuthFlow onAuthComplete={handleAuthComplete} />
       </SafeAreaProvider>
     );
@@ -414,7 +590,7 @@ export default function App() {
   // Show main app if authenticated
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
+      <ExpoStatusBar style="dark" />
       <SafeAreaView style={styles.container} edges={['top']}>
         <NavigationContainer ref={navigationRef}>
           <MainStack.Navigator
@@ -436,6 +612,7 @@ export default function App() {
                   onNavigateToSchedules={handleNavigateToSchedules}
                   onNavigateToGames={handleNavigateToGames}
                   onSignOut={handleSignOut}
+                  navigationRef={navigationRef}
                 />
               )}
             </MainStack.Screen>
@@ -460,6 +637,22 @@ export default function App() {
                   route={route}
                   navigation={navigation}
                   setGamesRefreshTrigger={setGamesRefreshTrigger}
+                  user={user}
+                  profile={profile}
+                />
+              )}
+            </MainStack.Screen>
+            <MainStack.Screen
+              name="FindReview"
+              options={{ headerShown: false }}
+            >
+              {({ route, navigation }: any) => (
+                <FindReviewWrapper
+                  route={route}
+                  navigation={navigation}
+                  setGamesRefreshTrigger={setGamesRefreshTrigger}
+                  user={user}
+                  profile={profile}
                 />
               )}
             </MainStack.Screen>
@@ -475,24 +668,57 @@ export default function App() {
                 />
               )}
             </MainStack.Screen>
-          </MainStack.Navigator>
-
-          <Modal
-            visible={showCreateModal}
-            animationType="slide"
-            presentationStyle="pageSheet"
-            onRequestClose={() => setShowCreateModal(false)}
-          >
-            <CreateGameFlow 
-              onClose={() => setShowCreateModal(false)} 
-              onGameCreated={(gameId: string) => {
-                console.log('Game created with ID:', gameId);
-                setShowCreateModal(false);
-                // Trigger schedule refresh
-                setScheduleRefreshTrigger(prev => prev + 1);
+            <MainStack.Screen
+              name="CreateGameFlow"
+              options={{
+                headerShown: false,
+                presentation: 'modal',
+                animationTypeForReplace: 'push',
+                animation: 'slide_from_bottom',
               }}
-            />
-          </Modal>
+            >
+              {({ route, navigation }: any) => (
+                <CreateGameFlowWrapper
+                  route={route}
+                  navigation={navigation}
+                  setScheduleRefreshTrigger={setScheduleRefreshTrigger}
+                />
+              )}
+            </MainStack.Screen>
+            <MainStack.Screen
+              name="Profile"
+              options={{ headerShown: false }}
+            >
+              {({ route, navigation }: any) => (
+                <ProfileScreenWrapper
+                  route={route}
+                  navigation={navigation}
+                />
+              )}
+            </MainStack.Screen>
+            <MainStack.Screen
+              name="ManageNotifications"
+              options={{ headerShown: false }}
+            >
+              {({ route, navigation }: any) => (
+                <ManageNotificationsScreenWrapper
+                  route={route}
+                  navigation={navigation}
+                />
+              )}
+            </MainStack.Screen>
+            <MainStack.Screen
+              name="ManageDoublePartners"
+              options={{ headerShown: false }}
+            >
+              {({ route, navigation }: any) => (
+                <ManageDoublePartnersScreenWrapper
+                  route={route}
+                  navigation={navigation}
+                />
+              )}
+            </MainStack.Screen>
+          </MainStack.Navigator>
         </NavigationContainer>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -502,11 +728,11 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
   safeArea: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
   content: {
     flex: 1,
@@ -532,17 +758,10 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   tabBar: {
-    backgroundColor: '#FEF2D6',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.08)',
-    paddingBottom: 40,
-    paddingTop: 8,
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+    paddingBottom: 48,
+    paddingTop: 0,
     height: 100,
-  },
-  tabBarLabel: {
-    ...globalTextStyles.tabLabel,
-    marginBottom: 2,
-    marginTop: 2,
   },
   loadingContainer: {
     flex: 1,

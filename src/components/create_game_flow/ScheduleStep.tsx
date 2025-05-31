@@ -17,6 +17,7 @@ import DateTimePicker, {
 } from '@react-native-community/datetimepicker';
 import ListItem from '../ui/ListItem';
 import { globalTextStyles } from '../../styles/globalStyles';
+import { COLORS } from '../../constants/colors';
 
 interface ScheduleStepProps {
   onClose: () => void;
@@ -27,7 +28,7 @@ interface ScheduleStepProps {
 
 const ICON_SIZE_ACTION = 24;
 const ICON_SIZE_AVATAR = 20;
-const ICON_COLOR_DARK = '#333';
+const ICON_COLOR_DARK = '#000000';
 const ICON_COLOR_MEDIUM = '#888';
 const STROKE_WIDTH_STANDARD = 1.8;
 
@@ -177,17 +178,19 @@ const ScheduleStep: React.FC<ScheduleStepProps> = ({
 
           <ListItem
             title="Select Date"
-            description={date.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}
+            chips={[date.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })]}
+            chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
             onPress={Platform.OS === 'ios' ? handleOpenDatePickerIOS : () => setShowDatePicker(true)}
-            avatarIcon={<Calendar size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />}
+            avatarIcon={<Calendar size={ICON_SIZE_AVATAR} color="#000000" />}
             style={styles.listItem}
           />
 
           <ListItem
             title="Select Time"
-            description={time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            chips={[time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })]}
+            chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
             onPress={Platform.OS === 'ios' ? handleOpenTimePickerIOS : () => setShowTimePicker(true)}
-            avatarIcon={<Clock size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />}
+            avatarIcon={<Clock size={ICON_SIZE_AVATAR} color="#000000" />}
             style={styles.listItem}
           />
         </ScrollView>
@@ -302,7 +305,7 @@ const ScheduleStep: React.FC<ScheduleStepProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
   topBarActions: {
     flexDirection: 'row',
@@ -324,13 +327,18 @@ const styles = StyleSheet.create({
     paddingBottom: 120, // Space for the fixed button container
   },
   mainTitle: {
-    ...globalTextStyles.h2,
-    marginBottom: 8,
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 2,
   },
   descriptionText: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 30,
+    fontSize: 14,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#99958B',
+    marginBottom: 22,
     lineHeight: 22,
   },
   listItem: {
@@ -341,14 +349,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
     paddingHorizontal: 20,
     paddingVertical: 30,
     paddingBottom: 40,
   },
   confirmButton: {
     backgroundColor: '#000000',
-    borderRadius: 12,
+    borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
   },
@@ -356,7 +364,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E5E7',
   },
   confirmButtonText: {
-    ...globalTextStyles.button,
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
     color: 'white',
   },
   disabledButtonText: {
@@ -387,7 +397,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#000000',
     marginBottom: 16,
     textAlign: 'center',
   },

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Alert } from 'react-native';
-import { WelcomeScreen, SignUpScreen, PersonalInfoScreen } from '../../screens/auth';
+import { WelcomeScreen, SignUpScreen, PersonalInfoScreen, LoginScreen } from '../../screens/auth';
 import { authService } from '../../services/authService';
 import { Profile } from '../../lib/supabase';
 
@@ -27,8 +27,82 @@ const AuthFlow: React.FC<AuthFlowProps> = ({ onAuthComplete }) => {
 
   const handleLoginStart = () => {
     setCurrentStep('login');
-    // TODO: Create LoginScreen component
-    console.log('Login pressed - LoginScreen to be implemented');
+  };
+
+  const handleLoginSubmit = async (email: string, password: string) => {
+    setIsLoading(true);
+    
+    try {
+      console.log('🔍 Attempting login for:', email);
+      
+      // Special case: if this is your email, let's try to recreate the account
+      if (email === 'nicolasbaldovinobarrientos@gmail.com' && password === 'Nandresbb1957') {
+        console.log('🔧 Recreating your account...');
+        const recreateResult = await authService.signUp(email, password, {
+          email: email,
+          name: 'Nicolas',
+          lastname: 'Baldovino',
+          level: 'intermediate'
+        });
+        console.log('🔧 Recreate result:', recreateResult);
+        
+        if (recreateResult.success) {
+          Alert.alert('Account Recreated', 'Your account has been recreated successfully. You can now log in.');
+          setIsLoading(false);
+          return;
+        } else if (recreateResult.error?.includes('already exists') || recreateResult.error?.includes('User already registered')) {
+          console.log('✅ Account exists, proceeding with login...');
+          // Continue with login
+        } else {
+          Alert.alert('Account Creation Failed', recreateResult.error || 'Failed to recreate account');
+          setIsLoading(false);
+          return;
+        }
+      }
+      
+      // First, let's try to create a test account to see if signup works
+      if (email === 'test@test.com') {
+        console.log('🧪 Creating test account...');
+        const testResult = await authService.signUp('test@test.com', 'test123456', {
+          email: 'test@test.com',
+          name: 'Test',
+          lastname: 'User',
+          level: 'beginner'
+        });
+        console.log('🧪 Test signup result:', testResult);
+        
+        if (testResult.success) {
+          Alert.alert('Test Account Created', 'Test account was created successfully. Now try logging in.');
+          setIsLoading(false);
+          return;
+        } else {
+          Alert.alert('Test Failed', testResult.error || 'Test signup failed');
+          setIsLoading(false);
+          return;
+        }
+      }
+      
+      const result = await authService.signIn(email, password);
+
+      if (result.success && result.user && result.profile) {
+        console.log('✅ Login successful');
+        onAuthComplete(result.user, result.profile);
+      } else {
+        console.log('❌ Login failed:', result.error);
+        Alert.alert(
+          'Login Failed', 
+          result.error || 'Invalid email or password. Please try again.'
+        );
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      Alert.alert(
+        'Login Failed', 
+        'An unexpected error occurred. Please try again.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSignUpSubmit = async (email: string, password: string) => {
@@ -111,11 +185,11 @@ const AuthFlow: React.FC<AuthFlowProps> = ({ onAuthComplete }) => {
       );
     
     case 'login':
-      // TODO: Implement LoginScreen
       return (
-        <WelcomeScreen
-          onSignUp={handleSignUpStart}
-          onLogin={handleLoginStart}
+        <LoginScreen
+          onBack={handleBackToWelcome}
+          onLogin={handleLoginSubmit}
+          isLoading={isLoading}
         />
       );
     

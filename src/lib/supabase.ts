@@ -88,6 +88,8 @@ class SupabaseHTTPClient {
 
   async signIn(email: string, password: string) {
     try {
+      console.log('🔄 Starting signin with:', { email });
+      
       const response = await fetch(`${this.baseUrl}/auth/v1/token?grant_type=password`, {
         method: 'POST',
         headers: {
@@ -98,15 +100,56 @@ class SupabaseHTTPClient {
         body: JSON.stringify({ email, password }),
       });
       
+      console.log('📡 SignIn Response status:', response.status);
       const data = await response.json();
+      console.log('📦 SignIn Response data:', JSON.stringify(data, null, 2));
       
-      if (data.user && data.session) {
-        await AsyncStorage.setItem('supabase_user', JSON.stringify(data.user));
-        await AsyncStorage.setItem('supabase_session', JSON.stringify(data.session));
+      // Check for different error scenarios
+      if (response.status === 400) {
+        console.log('❌ Bad request error:', data);
+        return { 
+          data: null, 
+          error: { 
+            message: data.msg || data.message || 'Invalid email or password',
+            code: data.error_code || data.code
+          } 
+        };
       }
       
-      return { data, error: data.error || null };
+      if (response.status === 422) {
+        console.log('❌ Unprocessable entity error:', data);
+        return { 
+          data: null, 
+          error: { 
+            message: data.msg || data.message || 'Invalid credentials',
+            code: data.error_code || data.code
+          } 
+        };
+      }
+      
+      if (data.error) {
+        console.log('❌ Error in signin response:', data.error);
+        return { data: null, error: data.error };
+      }
+      
+      if (data.user && data.session) {
+        console.log('✅ Successful signin, saving data');
+        await AsyncStorage.setItem('supabase_user', JSON.stringify(data.user));
+        await AsyncStorage.setItem('supabase_session', JSON.stringify(data.session));
+        return { data, error: null };
+      } else {
+        console.log('❌ No user or session in response');
+        return { 
+          data: null, 
+          error: { 
+            message: 'No user data returned from signin',
+            code: 'NO_USER_DATA'
+          } 
+        };
+      }
+      
     } catch (error) {
+      console.error('💥 SignIn network error:', error);
       return { data: null, error };
     }
   }
@@ -219,14 +262,107 @@ class SupabaseHTTPClient {
       return { data: null, error };
     }
   }
+
+  async update(table: string, values: any, column: string, value: any) {
+    try {
+      const session = await this.getSession();
+      if (!session?.access_token) {
+        throw new Error('No session found');
+      }
+
+      const response = await fetch(`${this.baseUrl}/rest/v1/${table}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': this.apiKey,
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          [column]: value,
+          data: values,
+        }),
+      });
+      
+      const data = await response.json();
+      return { data, error: response.ok ? null : data };
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  async delete(table: string, column: string, value: any) {
+    try {
+      const session = await this.getSession();
+      if (!session?.access_token) {
+        throw new Error('No session found');
+      }
+
+      const response = await fetch(`${this.baseUrl}/rest/v1/${table}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': this.apiKey,
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          [column]: value,
+        }),
+      });
+      
+      const data = await response.json();
+      return { data, error: response.ok ? null : data };
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
 }
 
-export const supabase = new SupabaseHTTPClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Keep the HTTP client instance
+const httpClient = new SupabaseHTTPClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Export the HTTP client as supabaseClient for compatibility
+export const supabaseClient = {
+  auth: {
+    signUp: async (options: any) => {
+      const result = await httpClient.signUp(options.email, options.password, options.options?.data);
+      return {
+        data: result.data,
+        error: result.error
+      };
+    },
+    signInWithPassword: async (options: any) => {
+      const result = await httpClient.signIn(options.email, options.password);
+      return {
+        data: result.data,
+        error: result.error
+      };
+    },
+    signOut: () => httpClient.signOut(),
+    getUser: async () => {
+      const user = await httpClient.getUser();
+      return { data: { user } };
+    },
+  },
+  from: (table: string) => ({
+    select: (columns?: string) => ({
+      eq: (column: string, value: any) => ({
+        single: () => httpClient.query(table, { single: true }),
+      }),
+    }),
+    insert: (values: any) => httpClient.insert(table, values),
+    update: (values: any) => ({
+      eq: (column: string, value: any) => httpClient.update(table, values, column, value),
+    }),
+    delete: () => ({
+      eq: (column: string, value: any) => httpClient.delete(table, column, value),
+    }),
+  }),
+};
 
 // Mock auth object for compatibility
 export const auth = {
   signUp: async (options: any) => {
-    const result = await supabase.signUp(options.email, options.password, options.options?.data);
+    const result = await httpClient.signUp(options.email, options.password, options.options?.data);
     
     // Return in the expected format
     return {
@@ -235,16 +371,16 @@ export const auth = {
     };
   },
   signInWithPassword: async (options: any) => {
-    const result = await supabase.signIn(options.email, options.password);
+    const result = await httpClient.signIn(options.email, options.password);
     
     return {
       data: result.data,
       error: result.error
     };
   },
-  signOut: () => supabase.signOut(),
+  signOut: () => httpClient.signOut(),
   getUser: async () => {
-    const user = await supabase.getUser();
+    const user = await httpClient.getUser();
     return { data: { user } };
   },
   onAuthStateChange: (callback: any) => {
@@ -253,8 +389,8 @@ export const auth = {
     
     const checkAuth = async () => {
       try {
-        const user = await supabase.getUser();
-        const session = await supabase.getSession();
+        const user = await httpClient.getUser();
+        const session = await httpClient.getSession();
         
         // Only call callback if auth state actually changed
         const currentAuthState = user ? 'SIGNED_IN' : 'SIGNED_OUT';
@@ -287,10 +423,10 @@ export const auth = {
 export const from = (table: string) => ({
   select: (columns: string = '*') => ({
     eq: (column: string, value: any) => ({
-      single: () => supabase.query(table, { select: columns, eq: [column, value], single: true })
+      single: () => httpClient.query(table, { select: columns, eq: [column, value], single: true })
     })
   }),
-  insert: (values: any) => supabase.insert(table, values),
+  insert: (values: any) => httpClient.insert(table, values),
   update: (values: any) => ({
     eq: (column: string, value: any) => {
       // TODO: Implement update if needed
@@ -298,15 +434,6 @@ export const from = (table: string) => ({
     }
   })
 });
-
-// Export with Supabase-like interface
-export const supabaseClient = {
-  auth,
-  from,
-  realtime: {
-    disconnect: () => {} // No-op
-  }
-};
 
 // Types for our database
 export interface Profile {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Alert, ActivityIndicator, StyleSheet, Text } from 'react-native';
+import { View, Alert, ActivityIndicator, StyleSheet, Text, StatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { gameService } from '../../services/gameService';
 import { authService } from '../../services/authService';
 import TypeOfGameStep from './TypeOfGameStep';
@@ -9,6 +10,9 @@ import SelectCourtStep from './SelectCourtStep';
 import OpponentLevelStep from './OpponentLevelStep';
 import ScheduleStep from './ScheduleStep';
 import ReviewStep from './ReviewStep';
+
+// Import colors
+import { COLORS } from '../../constants/colors';
 
 // Define types for the create game flow
 export type GameType = 'singles' | 'doubles';
@@ -101,20 +105,21 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
     handleNextStep(); // Go to ReviewStep instead of creating game immediately
   };
 
-  const handleScheduleGame = async (notes: string) => {
+  const handleScheduleGame = async (notes: string, phoneNumber: string) => {
     setIsLoading(true);
+
     try {
-      // Get current user info
+      // Get current user and profile 
       const currentUser = await authService.getCurrentUser();
       const currentProfile = await authService.getProfile(currentUser?.id || '');
-      
+
       if (!currentUser || !currentProfile) {
-        Alert.alert('Authentication Error', 'Please log in to create a game.');
+        Alert.alert('Error', 'Please log in to create a game.');
         setIsLoading(false);
         return;
       }
 
-      // Parse the ISO datetime to get date and time
+      // Convert scheduled_time to Date object and extract date/time parts
       const gameDateTime = new Date(gameData.scheduled_time!);
       const gameDate = gameDateTime.toISOString().split('T')[0]; // YYYY-MM-DD
       const gameTime = gameDateTime.toTimeString().slice(0, 5); // HH:MM
@@ -136,6 +141,7 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
         game_type: gameData.game_type!,
         skill_level: gameData.player_level!,
         notes: notes || `Looking for ${gameData.game_type} players at ${gameData.player_level} level`,
+        phone_number: phoneNumber, // Add phone number to game data
       };
 
       // Validate required fields
@@ -295,12 +301,18 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
     }
   };
 
-  return <View style={styles.container}>{renderStep()}</View>;
+  return (
+    <SafeAreaView style={styles.container} edges={[]}>
+      <StatusBar barStyle="dark-content" />
+      {renderStep()}
+    </SafeAreaView>
+  );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
   centered: {
     flex: 1,

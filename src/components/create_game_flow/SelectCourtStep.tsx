@@ -2,8 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { ArrowLeft, X, MapPin, ChevronRight } from 'lucide-react-native';
 import ListItem from '../ui/ListItem';
-import { Court } from '../../services/gameService';
 import { globalTextStyles } from '../../styles/globalStyles';
+import { COLORS } from '../../constants/colors';
+import { Court } from './CreateGameFlow';
 
 interface SelectCourtStepProps {
   courts: Court[];
@@ -16,7 +17,7 @@ interface SelectCourtStepProps {
 const ICON_SIZE_ACTION = 24;
 const ICON_SIZE_AVATAR = 20;
 const ICON_SIZE_CHEVRON = 18;
-const ICON_COLOR_DARK = '#333';
+const ICON_COLOR_DARK = '#000000';
 const ICON_COLOR_MEDIUM = '#888';
 const STROKE_WIDTH_STANDARD = 1.8;
 
@@ -61,17 +62,33 @@ const SelectCourtStep: React.FC<SelectCourtStepProps> = ({
       <Text style={styles.mainTitle}>Select Your Court</Text>
 
       <ScrollView style={styles.listContainer}>
-        {courts.map((court) => (
-          <ListItem
-            key={court.id}
-            avatarIcon={<MapPin size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />}
-            title={court.name}
-            description={court.distance}
-            onPress={() => onSelectCourt(court.id)}
-            rightElement={<ChevronRight size={ICON_SIZE_CHEVRON} color={ICON_COLOR_MEDIUM} />}
-            style={styles.listItem}
-          />
-        ))}
+        {courts.map((court) => {
+          // Determine if court is free or paid based on name (this would come from API in real app)
+          const isPaid = court.name.toLowerCase().includes('elite') || court.name.toLowerCase().includes('club');
+          const paymentStatus = isPaid ? 'Paid' : 'Free';
+          
+          const chips = [
+            court.distance || 'Distance TBD',
+            paymentStatus
+          ];
+          
+          const chipBackgrounds = [
+            'rgba(0, 0, 0, 0.07)', // Distance chip
+            'rgba(0, 0, 0, 0.07)', // Payment status chip
+          ];
+
+          return (
+            <ListItem
+              key={court.id}
+              title={court.name}
+              chips={chips}
+              chipBackgrounds={chipBackgrounds}
+              avatarIcon={<MapPin size={ICON_SIZE_AVATAR} color="#000000" />}
+              onPress={() => onSelectCourt(court.id)}
+              style={styles.listItem}
+            />
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -80,7 +97,7 @@ const SelectCourtStep: React.FC<SelectCourtStepProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
     paddingHorizontal: 20,
     paddingTop: 20,
   },
@@ -124,8 +141,11 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   mainTitle: {
-    ...globalTextStyles.h2,
-    marginBottom: 20,
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 24,
   },
   listContainer: {
     flex: 1,

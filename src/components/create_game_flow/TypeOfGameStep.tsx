@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { X, ChevronRight, User, Users } from 'lucide-react-native';
 import ListItem from '../ui/ListItem';
 import { globalTextStyles } from '../../styles/globalStyles';
+import { COLORS } from '../../constants/colors';
 
 interface TypeOfGameStepProps {
   onClose: () => void;
@@ -12,7 +13,7 @@ interface TypeOfGameStepProps {
 const ICON_SIZE_CLOSE = 24;
 const ICON_SIZE_CHEVRON = 18;
 const ICON_SIZE_AVATAR = 20;
-const ICON_COLOR_DARK = '#333';
+const ICON_COLOR_DARK = '#000000';
 const ICON_COLOR_MEDIUM = '#888';
 const STROKE_WIDTH_STANDARD = 1.8;
 
@@ -53,7 +54,7 @@ const TypeOfGameStep: React.FC<TypeOfGameStepProps> = ({ onClose, onSelectType }
 const styles = StyleSheet.create({
   container: {
     flex: 1, 
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
     paddingHorizontal: 20,
     paddingTop: 20, // This acts as top margin from Safe Area edge
   },
@@ -62,23 +63,27 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'center',
     marginBottom: 16, // Space between X and the title
-    // If you need this bar to span full width and have specific height:
-    // width: '100%',
-    // height: 30, // Adjust as needed
   },
   closeButton: {
     padding: 8, 
   },
   mainTitle: {
-    ...globalTextStyles.h2,
-    marginBottom: 30, // Space between title and list items
-    // textAlign: 'left', // Default, but explicit if needed
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 24, // Space between title and list items
   },
   listContainer: {
     // Styles for the list container if needed
   },
   listItem: {
     marginBottom: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 60,
   },
 });
 

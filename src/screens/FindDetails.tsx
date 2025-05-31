@@ -1,145 +1,157 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, Text, StatusBar, TouchableOpacity, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, StatusBar, TouchableOpacity, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, User, Users, MapPin, Clock, Star } from 'lucide-react-native';
+import { ArrowLeft, User, Clock, MapPin, Zap, FileText } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
 // Import custom components
 import TopBar from '../components/ui/TopBar';
+import ListItem from '../components/ui/ListItem';
+
+// Import colors
+import { COLORS } from '../constants/colors';
 
 // Import game service and types
 import { Game, gameService } from '../services/gameService';
 
 interface FindDetailsProps {
   game: Game;
+  user: any;
+  profile: any;
   onBack: () => void;
   onAcceptGame: (gameId: string, navigateToGames?: boolean) => void;
 }
 
-const FindDetails: React.FC<FindDetailsProps> = ({ game, onBack, onAcceptGame }) => {
+const FindDetails: React.FC<FindDetailsProps> = ({ game, user, profile, onBack, onAcceptGame }) => {
   const formattedDateTime = gameService.formatGameDateTime(game.date, game.time);
   const navigation = useNavigation();
 
-  const handleAcceptGame = () => {
-    Alert.alert(
-      'Game Accepted!',
-      `You've successfully joined the ${game.game_type} game with ${game.creator_name}. The game details have been added to your Games tab.`,
-      [
-        {
-          text: 'View My Games',
-          onPress: () => {
-            onAcceptGame(game.id, true);
-          },
-        },
-      ],
-      { cancelable: false }
-    );
+  // Placeholder images for profile pictures
+  const playerImages = [
+    'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+    'https://images.unsplash.com/photo-1494790108755-2616b612b510?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+  ];
+
+  const handleContinue = () => {
+    (navigation as any).navigate('FindReview', { 
+      game,
+      user,
+      profile,
+      onAcceptGame: (gameId: string, phoneNumber: string, notes?: string) => {
+        // Handle the actual game acceptance with phone and notes
+        onAcceptGame(gameId, true);
+      }
+    });
   };
 
-  const renderGameTypeInfo = () => {
+  // Player profile picture
+  const playerAvatarIcon = (
+    <View style={styles.playerPictureContainer}>
+      <Image
+        source={{ uri: playerImages[0] }}
+        style={styles.playerPicture}
+      />
+    </View>
+  );
+
+  // Player information based on game type
+  const getPlayerInfo = () => {
     if (game.game_type === 'singles') {
-      return (
-        <View style={styles.playerSection}>
-          <View style={styles.playerHeader}>
-            <User size={24} color="#007AFF" />
-            <Text style={styles.playerHeaderText}>Singles Match</Text>
-          </View>
-          <View style={styles.playerInfo}>
-            <Text style={styles.playerName}>{game.creator_name}</Text>
-            <Text style={styles.playerLevel}>Level: {game.creator_level}</Text>
-          </View>
-        </View>
-      );
+      return {
+        title: 'Player',
+        chip: game.creator_name,
+        backgroundColor: '#FFC738' // Yellow for singles
+      };
     } else {
-      return (
-        <View style={styles.playerSection}>
-          <View style={styles.playerHeader}>
-            <Users size={24} color="#007AFF" />
-            <Text style={styles.playerHeaderText}>Doubles Match</Text>
-          </View>
-          <View style={styles.playerInfo}>
-            <Text style={styles.playerName}>{game.creator_name}</Text>
-            <Text style={styles.playerLevel}>Level: {game.creator_level}</Text>
-            {game.partner_name ? (
-              <>
-                <Text style={styles.playerName}>{game.partner_name}</Text>
-                <Text style={styles.playerLevel}>Level: {game.partner_level}</Text>
-              </>
-            ) : (
-              <Text style={styles.needPartnerText}>Looking for a partner</Text>
-            )}
-          </View>
-        </View>
-      );
+      // Doubles game
+      if (game.partner_name) {
+        return {
+          title: 'Player',
+          chip: `${game.creator_name} & ${game.partner_name}`,
+          backgroundColor: '#FF9442' // Orange for doubles
+        };
+      } else {
+        return {
+          title: 'Player',
+          chip: `${game.creator_name} (need partner)`,
+          backgroundColor: '#FF9442' // Orange for doubles
+        };
+      }
     }
   };
+
+  const playerInfo = getPlayerInfo();
 
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}>
       <StatusBar barStyle="dark-content" />
       
-      {/* Use TopBar instead of custom header */}
       <TopBar
-        title={formattedDateTime}
-        leftIcon={<ArrowLeft size={24} color="#007AFF" />}
+        title="Game Found"
+        leftIcon={<ArrowLeft size={24} color="#000000" />}
         onLeftIconPress={onBack}
+        style={styles.topBar}
+        titleContainerStyle={styles.titleContainer}
+        titleStyle={styles.titleStyle}
       />
 
       <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
-        {/* Game Type and Player Info */}
-        {renderGameTypeInfo()}
+        {/* Player Section */}
+        <ListItem
+          title={playerInfo.title}
+          chips={[playerInfo.chip]}
+          chipBackgrounds={['rgba(255, 255, 255, 0.3)']}
+          avatarIcon={playerAvatarIcon}
+          style={{
+            ...styles.listItem,
+            backgroundColor: playerInfo.backgroundColor
+          }}
+        />
 
-        {/* Location Info */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoRow}>
-            <MapPin size={20} color="#666" />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Location</Text>
-              <Text style={styles.infoValue}>{game.location}</Text>
-              {game.court_number && (
-                <Text style={styles.infoSubValue}>{game.court_number}</Text>
-              )}
-            </View>
-          </View>
-        </View>
+        {/* Date & Time Section */}
+        <ListItem
+          title="Date & Time"
+          chips={[formattedDateTime]}
+          chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
+          avatarIcon={<Clock size={20} color="#000000" />}
+          style={styles.listItem}
+        />
 
-        {/* Time Info */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoRow}>
-            <Clock size={20} color="#666" />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Time</Text>
-              <Text style={styles.infoValue}>{formattedDateTime}</Text>
-            </View>
-          </View>
-        </View>
+        {/* Locations Section */}
+        <ListItem
+          title="Locations"
+          chips={[game.location]}
+          chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
+          avatarIcon={<MapPin size={20} color="#000000" />}
+          style={styles.listItem}
+        />
 
-        {/* Skill Level */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoRow}>
-            <Star size={20} color="#666" />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Skill Level</Text>
-              <Text style={styles.infoValue}>{game.skill_level}</Text>
-            </View>
-          </View>
-        </View>
+        {/* Level Section */}
+        <ListItem
+          title="Level"
+          chips={[game.skill_level]}
+          chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
+          avatarIcon={<Zap size={20} color="#000000" />}
+          style={styles.listItem}
+        />
 
-        {/* Notes */}
+        {/* Player Notes Section */}
         {game.notes && (
-          <View style={styles.notesSection}>
-            <Text style={styles.notesLabel}>Notes</Text>
-            <View style={styles.notesContainer}>
-              <Text style={styles.notesText}>{game.notes}</Text>
-            </View>
-          </View>
+          <ListItem
+            title={`${game.creator_name} Notes`}
+            chips={[game.notes]}
+            chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
+            avatarIcon={<FileText size={20} color="#000000" />}
+            style={styles.listItem}
+          />
         )}
       </ScrollView>
 
-      {/* Accept Game Button */}
+      {/* Continue Button */}
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.acceptButton} onPress={handleAcceptGame}>
-          <Text style={styles.acceptButtonText}>Accept Game</Text>
+        <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
+          <Text style={styles.continueButtonText}>Continue</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -149,117 +161,61 @@ const FindDetails: React.FC<FindDetailsProps> = ({ game, onBack, onAcceptGame })
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+  },
+  topBar: {
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+  },
+  titleContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleStyle: {
+    fontSize: 20,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#000000',
+    textAlign: 'center',
   },
   scrollContainer: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
+    paddingBottom: 32,
   },
-  playerSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  playerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  listItem: {
     marginBottom: 12,
   },
-  playerHeaderText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginLeft: 8,
+  playerPictureContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
   },
-  playerInfo: {
-    paddingLeft: 32,
-  },
-  playerName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 4,
-  },
-  playerLevel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-  },
-  needPartnerText: {
-    fontSize: 14,
-    color: '#FF9500',
-    fontStyle: 'italic',
-    marginTop: 8,
-  },
-  infoSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  infoTextContainer: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  infoSubValue: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  notesSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  notesLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  notesContainer: {
-    backgroundColor: '#F5F0E8',
-    borderRadius: 8,
-    padding: 12,
-  },
-  notesText: {
-    fontSize: 14,
-    color: '#333',
-    lineHeight: 20,
+  playerPicture: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
   },
   buttonContainer: {
     padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5E7',
+    paddingBottom: 32,
   },
-  acceptButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
+  continueButton: {
+    backgroundColor: '#000000',
+    borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  acceptButtonText: {
+  continueButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
     color: '#FFFFFF',
   },
 });

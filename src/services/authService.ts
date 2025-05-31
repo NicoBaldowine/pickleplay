@@ -31,8 +31,8 @@ class AuthService {
       
       if (error) {
         console.error('❌ Signup error:', error);
-        const errorMessage = error.message || error.msg || 'Error creating account';
-        const errorCode = error.code || error.error_code;
+        const errorMessage = error.message || 'Error creating account';
+        const errorCode = (error as any).code || 'UNKNOWN_ERROR';
         console.log('🔍 Error details:', { message: errorMessage, code: errorCode });
         return { success: false, error: errorMessage };
       }
@@ -107,28 +107,64 @@ class AuthService {
 
   async signIn(email: string, password: string): Promise<AuthResponse> {
     try {
+      console.log('🚀 AuthService.signIn called with email:', email);
+      
       const { data, error } = await supabaseClient.auth.signInWithPassword({
         email,
         password,
       });
       
+      console.log('📋 SignIn result:', { data: !!data, error: !!error });
+      console.log('👤 User data:', data?.user ? 'Present' : 'Missing');
+      
       if (error) {
-        return { success: false, error: error.message || 'Error signing in' };
+        console.error('❌ SignIn error:', error);
+        
+        // Provide more specific error messages
+        let errorMessage = error.message || 'Error signing in';
+        
+        if (error.message?.includes('Invalid login credentials')) {
+          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+        } else if (error.message?.includes('Email not confirmed')) {
+          errorMessage = 'Please check your email and confirm your account before signing in.';
+        } else if (error.message?.includes('Too many requests')) {
+          errorMessage = 'Too many login attempts. Please wait a moment and try again.';
+        }
+        
+        return { success: false, error: errorMessage };
       }
 
       if (!data.user) {
-        return { success: false, error: 'No user data returned' };
+        console.error('❌ No user data returned from signin');
+        return { success: false, error: 'No user data returned from signin. Please check your credentials.' };
+      }
+
+      console.log('✅ User signed in successfully:', data.user.id);
+
+      // Save user and session to AsyncStorage for consistent access
+      await AsyncStorage.setItem('supabase_user', JSON.stringify(data.user));
+      
+      if (data.session) {
+        await AsyncStorage.setItem('supabase_session', JSON.stringify(data.session));
+        console.log('💾 Session saved for user:', data.user.id);
       }
 
       // Get user profile
       const profile = await this.getProfile(data.user.id);
+      console.log('👤 Profile fetched:', profile ? 'Found' : 'Not found');
+
+      if (!profile) {
+        console.error('❌ No profile found for user');
+        return { success: false, error: 'User profile not found. Please contact support.' };
+      }
 
       return { 
         success: true, 
         user: data.user,
-        profile: profile || undefined
+        profile: profile
       };
     } catch (error: any) {
+      console.error('💥 AuthService signin error:', error);
       return { success: false, error: error.message || 'Unexpected error occurred' };
     }
   }
@@ -158,7 +194,9 @@ class AuthService {
 
   async getProfile(userId: string): Promise<Profile | null> {
     try {
-      // Get profile from stored user data to avoid JWT issues
+      console.log('🔍 Getting profile for user:', userId);
+      
+      // First try to get profile from stored user data
       const userString = await AsyncStorage.getItem('supabase_user');
       if (userString) {
         const user = JSON.parse(userString);
@@ -180,10 +218,29 @@ class AuthService {
         return profile;
       }
       
-      console.log('❌ No stored user data found');
+      // If no stored data, try to get from database
+      console.log('🔄 No stored user data, trying database...');
+      try {
+        const { data, error } = await supabaseClient
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        if (error) {
+          console.error('❌ Database profile fetch error:', error);
+        } else if (data) {
+          console.log('✅ Profile found in database');
+          return data as Profile;
+        }
+      } catch (dbError) {
+        console.error('❌ Database connection error:', dbError);
+      }
+      
+      console.log('❌ No profile found anywhere');
       return null;
     } catch (error) {
-      console.error('Error getting profile:', error);
+      console.error('💥 Error getting profile:', error);
       return null;
     }
   }

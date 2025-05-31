@@ -4,6 +4,7 @@ import { ArrowLeft, X, ChevronRight, Rabbit, Cat, Dog, Crown } from 'lucide-reac
 import ListItem from '../ui/ListItem';
 import { PlayerLevel } from '../../services/gameService'; // Import PlayerLevel type
 import { globalTextStyles } from '../../styles/globalStyles';
+import { COLORS } from '../../constants/colors';
 
 interface OpponentLevelStepProps {
   // gameType: 'singles' | 'doubles'; // Removed, not essential for this step
@@ -12,36 +13,40 @@ interface OpponentLevelStepProps {
   onSelectLevel: (level: PlayerLevel) => void; // Updated to use PlayerLevel type
 }
 
-const levelData: { id: PlayerLevel; title: string; description: string; icon: React.ReactNode }[] = [
+const levelData: { id: PlayerLevel; title: string; description: string; range: string; icon: React.ReactNode }[] = [
   { 
     id: 'beginner', 
     title: 'Beginner', 
-    description: '1.0-2.5 • Learning basic rules and strokes',
-    icon: <Rabbit size={20} color="#333" />
+    description: 'Learning basic rules and strokes',
+    range: '1.0-2.5',
+    icon: <Rabbit size={20} color="#000000" />
   },
   { 
     id: 'intermediate', 
     title: 'Intermediate', 
-    description: '3.0-3.5 • Consistent serves and developing strategy',
-    icon: <Cat size={20} color="#333" />
+    description: 'Consistent serves and developing strategy',
+    range: '3.0-3.5',
+    icon: <Cat size={20} color="#000000" />
   },
   { 
     id: 'advanced', 
     title: 'Advanced', 
-    description: '4.0-4.5 • Powerful shots and tournament play',
-    icon: <Dog size={20} color="#333" />
+    description: 'Powerful shots and tournament play',
+    range: '4.0-4.5',
+    icon: <Dog size={20} color="#000000" />
   },
   { 
     id: 'pro', 
     title: 'Pro', 
-    description: '5.0+ • Professional level play',
-    icon: <Crown size={20} color="#333" />
+    description: 'Professional level play',
+    range: '5.0+',
+    icon: <Crown size={20} color="#000000" />
   },
 ];
 
 const ICON_SIZE_ACTION = 24; 
 const ICON_SIZE_CHEVRON = 18;
-const ICON_COLOR_DARK = '#333';
+const ICON_COLOR_DARK = '#000000';
 const ICON_COLOR_MEDIUM = '#888';
 const STROKE_WIDTH_STANDARD = 1.8;
 
@@ -64,10 +69,10 @@ const OpponentLevelStep: React.FC<OpponentLevelStepProps> = ({ /*gameType,*/ onC
           <ListItem
             key={level.id}
             title={level.title}
-            description={level.description}
+            chips={[level.range]}
+            chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
             avatarIcon={level.icon}
             onPress={() => onSelectLevel(level.id)}
-            rightElement={<ChevronRight size={ICON_SIZE_CHEVRON} color={ICON_COLOR_MEDIUM} />}
             style={styles.listItem}
           />
         ))}
@@ -79,7 +84,7 @@ const OpponentLevelStep: React.FC<OpponentLevelStepProps> = ({ /*gameType,*/ onC
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
     paddingHorizontal: 20,
     paddingTop: 20,
   },
@@ -96,8 +101,11 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   mainTitle: {
-    ...globalTextStyles.h2,
-    marginBottom: 30,
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 24,
   },
   listContainer: {
     // Styles for the list container if needed
