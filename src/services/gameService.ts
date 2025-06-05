@@ -178,6 +178,12 @@ class GameService {
 
           console.log(`⚔️ DEBUG: Opponents for user ${userId} in game ${game.id}:`, opponentIds);
 
+          // Skip games where user has no opponents (these should stay in Schedules)
+          if (opponentIds.length === 0) {
+            console.log(`⏭️ DEBUG: Skipping game ${game.id} - no opponents found`);
+            return null;
+          }
+
           let opponentInfo = {
             name: 'Unknown Player',
             imageUrl: game.game_type === 'singles' 
@@ -265,9 +271,9 @@ class GameService {
         })
       );
 
-      console.log(`🏁 DEBUG: Final games for user ${userId}:`, gamesWithOpponents.map(g => ({ id: g.id, opponentName: g.creator?.full_name, type: g.game_type })));
+      console.log(`🏁 DEBUG: Final games for user ${userId}:`, gamesWithOpponents.filter(g => g !== null).map(g => ({ id: g!.id, opponentName: g!.creator?.full_name, type: g!.game_type })));
 
-      return gamesWithOpponents;
+      return gamesWithOpponents.filter(game => game !== null) as UserGame[];
     } catch (error) {
       console.error('Error fetching user games:', error);
       throw error;
