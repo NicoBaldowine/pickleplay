@@ -1,99 +1,203 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { ArrowLeft, X, User, ChevronRight, Plus } from 'lucide-react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, Text, StatusBar, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { X, UserPlus, User } from 'lucide-react-native';
+import TopBar from '../ui/TopBar';
+import { doublePartnersService, DoublePartner } from '../../services/doublePartnersService';
 import ListItem from '../ui/ListItem';
-import { globalTextStyles } from '../../styles/globalStyles';
+import { authService } from '../../services/authService';
+
+// Import colors
 import { COLORS } from '../../constants/colors';
 
 interface DoublesStepProps {
   onClose: () => void;
   onBack: () => void;
-  onSelectPartner: (partnerName: string) => void;
+  onSelectPartner: (partner: { name: string; level: string; id?: string }) => void;
   onCreateNewPartner: () => void;
 }
 
-const ICON_SIZE_ACTION = 24;
 const ICON_SIZE_AVATAR = 20;
-const ICON_SIZE_CHEVRON = 18;
 const ICON_COLOR_DARK = '#000000';
-const ICON_COLOR_MEDIUM = '#888';
-const ICON_COLOR_BLUE = '#007AFF';
-const STROKE_WIDTH_STANDARD = 1.8;
-
-// Dummy saved partners (in a real app, this would come from user's saved partners)
-const savedPartners = [
-  { id: '1', name: 'Sarah Johnson' },
-  { id: '2', name: 'Mike Rodriguez' },
-  { id: '3', name: 'Emma Wilson' },
-];
 
 const DoublesStep: React.FC<DoublesStepProps> = ({ onClose, onBack, onSelectPartner, onCreateNewPartner }) => {
-  const handleSavedPartnerSelect = (partnerName: string) => {
-    onSelectPartner(partnerName);
+  const [partners, setPartners] = useState<DoublePartner[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadPartners();
+  }, []);
+
+  const loadPartners = async () => {
+    try {
+      setLoading(true);
+      const currentUser = await authService.getCurrentUser();
+      if (currentUser?.id) {
+        const userPartners = await doublePartnersService.getPartners(currentUser.id);
+        setPartners(userPartners);
+      }
+    } catch (error) {
+      console.error('Error loading partners:', error);
+      setPartners([]); // Set empty array on error
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePartnerSelect = (partner: DoublePartner) => {
+    onSelectPartner({
+      name: partner.partner_name,
+      level: partner.partner_level || 'intermediate',
+      id: partner.id,
+    });
+  };
+
+  const renderPartnerItem = (partner: DoublePartner) => {
+    const levelChip = partner.partner_level || 'Unknown';
+    
+    const chips = [levelChip];
+    const chipBackgrounds = ['rgba(0, 0, 0, 0.07)'];
+
+    return (
+      <ListItem
+        key={partner.id}
+        avatarIcon={<User size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />}
+        title={partner.partner_name || 'Unnamed Partner'}
+        chips={chips}
+        chipBackgrounds={chipBackgrounds}
+        onPress={() => handlePartnerSelect(partner)}
+        style={styles.listItem}
+      />
+    );
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.topBarActions}>
-        <TouchableOpacity onPress={onBack} style={styles.headerButtonLeft}>
-          <ArrowLeft size={ICON_SIZE_ACTION} color={ICON_COLOR_DARK} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={onClose} style={styles.headerButtonRight}>
-          <X size={ICON_SIZE_ACTION} color={ICON_COLOR_DARK} />
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
+      <StatusBar barStyle="dark-content" />
+      
+      <TopBar
+        title=""
+        leftIcon={<X size={24} color="#000000" />}
+        onLeftIconPress={onClose}
+        style={styles.topBar}
+      />
+      
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        {/* Main title */}
+        <Text style={styles.mainTitle}>Select Your Partner</Text>
 
-      <Text style={styles.mainTitle}>Your Doubles Partner</Text>
-
-      {/* Create new partner option */}
-      <View style={styles.createPartnerSection}>
+        {/* Create new partner option */}
         <ListItem
-          avatarIcon={<Plus size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />}
+          avatarIcon={<UserPlus size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />}
           title="Create a new partner"
           onPress={onCreateNewPartner}
-          rightElement={<ChevronRight size={ICON_SIZE_CHEVRON} color={ICON_COLOR_MEDIUM} />}
-          style={styles.listItem}
+          style={styles.createPartnerItem}
         />
-      </View>
 
-      {/* Saved partners section */}
-      {savedPartners.length > 0 && (
-        <View style={styles.savedPartnersSection}>
-          <Text style={styles.sectionTitle}>Saved Partners</Text>
-          {savedPartners.map((partner) => (
-            <ListItem
-              key={partner.id}
-              avatarIcon={<User size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />}
-              title={partner.name}
-              onPress={() => handleSavedPartnerSelect(partner.name)}
-              rightElement={<ChevronRight size={ICON_SIZE_CHEVRON} color={ICON_COLOR_MEDIUM} />}
-              style={styles.listItem}
-            />
-          ))}
-        </View>
-      )}
-    </View>
+        {/* Loading state */}
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.loadingText}>Loading partners...</Text>
+          </View>
+        )}
+
+        {/* Saved partners */}
+        {!loading && partners.length > 0 && (
+          <View style={styles.savedPartnersSection}>
+            <Text style={styles.sectionTitle}>Your Partners</Text>
+            {partners.map(renderPartnerItem)}
+          </View>
+        )}
+
+        {/* Empty state when no partners */}
+        {!loading && partners.length === 0 && (
+          <View style={styles.emptyStateContainer}>
+            <View style={styles.emptyIconContainer}>
+              <User size={48} color="#CCC" />
+            </View>
+            <Text style={styles.emptyStateTitle}>No partners yet</Text>
+            <Text style={styles.emptyStateDescription}>
+              Create your first doubles partner to easily schedule games together.
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: COLORS.BACKGROUND_PRIMARY,
+  },
+  topBar: {
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+  },
+  container: {
+    flex: 1,
+  },
+  contentContainer: {
     paddingHorizontal: 20,
     paddingTop: 20,
+    paddingBottom: 16,
   },
-  topBarActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  listItem: {
+    marginBottom: 8,
+  },
+  createPartnerItem: {
+    marginBottom: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'center',
+    minHeight: 60,
   },
-  headerButtonLeft: {
-    padding: 8,
+  savedPartnersSection: {
+    marginTop: 16,
   },
-  headerButtonRight: {
-    padding: 8,
+  sectionTitle: {
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 12,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: COLORS.TEXT_SECONDARY,
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    paddingTop: 40,
+  },
+  emptyIconContainer: {
+    marginBottom: 20,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  emptyStateDescription: {
+    fontSize: 14,
+    color: COLORS.TEXT_SECONDARY,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   mainTitle: {
     fontSize: 28,
@@ -101,26 +205,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.TEXT_PRIMARY,
     marginBottom: 24,
-  },
-  createPartnerSection: {
-    marginBottom: 30,
-  },
-  savedPartnersSection: {
-    flex: 1,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontFamily: 'InterTight-ExtraBold',
-    fontWeight: '800',
-    color: '#000000',
-    marginBottom: 16,
-  },
-  listItem: {
-    marginBottom: 12,
-    minHeight: 60,
-    paddingVertical: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
 

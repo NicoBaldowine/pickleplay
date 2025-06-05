@@ -1,23 +1,26 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, TouchableWithoutFeedback, Keyboard, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, TouchableWithoutFeedback, Keyboard, StatusBar, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native';
 
 interface LoginScreenProps {
   onBack: () => void;
   onLogin: (email: string, password: string) => void;
+  onForgotPassword?: (email: string) => void;
   isLoading?: boolean;
 }
 
-const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLogin, isLoading = false }) => {
+const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLogin, onForgotPassword, isLoading = false }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [lastError, setLastError] = useState('');
 
   const isFormValid = email.trim().length > 0 && password.length >= 6;
 
   const handleLogin = () => {
     if (isFormValid) {
+      setLastError(''); // Clear previous errors
       onLogin(email.trim(), password);
     }
   };
@@ -90,6 +93,19 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLogin, isLoading = 
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Forgot Password Link */}
+            {onForgotPassword && (
+              <TouchableOpacity 
+                onPress={() => {
+                  console.log('🔑 Forgot password pressed');
+                  onForgotPassword(email);
+                }}
+                style={styles.forgotPasswordButton}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
 
@@ -205,6 +221,16 @@ const styles = StyleSheet.create({
   },
   disabledButtonText: {
     color: '#999',
+  },
+  forgotPasswordButton: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+    paddingVertical: 4,
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
   },
 });
 

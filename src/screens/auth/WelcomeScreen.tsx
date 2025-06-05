@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,10 @@ import {
   TouchableOpacity,
   StatusBar,
   SafeAreaView,
+  Alert,
 } from 'react-native';
+import { authService } from '../../services/authService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface WelcomeScreenProps {
   onSignUp: () => void;
@@ -14,11 +17,63 @@ interface WelcomeScreenProps {
 }
 
 const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSignUp, onLogin }) => {
+  const [hasExistingSession, setHasExistingSession] = useState(false);
+
+  useEffect(() => {
+    checkExistingSession();
+  }, []);
+
+  const checkExistingSession = async () => {
+    try {
+      const user = await authService.getCurrentUser();
+      setHasExistingSession(!!user);
+    } catch (error) {
+      setHasExistingSession(false);
+    }
+  };
+
+  const handleClearSession = async () => {
+    Alert.alert(
+      'Clear Session',
+      'This will clear any existing session data and let you start fresh. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Clear', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('🧹 Clearing existing session...');
+              await AsyncStorage.clear();
+              await authService.signOut();
+              setHasExistingSession(false);
+              console.log('✅ Session cleared');
+            } catch (error) {
+              console.error('Error clearing session:', error);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
       
       <View style={styles.content}>
+        {/* Clear Session Button - Only show if there's an existing session */}
+        {hasExistingSession && (
+          <View style={styles.clearSessionContainer}>
+            <TouchableOpacity 
+              style={styles.clearSessionButton}
+              onPress={handleClearSession}
+            >
+              <Text style={styles.clearSessionText}>Clear Session</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Logo/Title Area */}
         <View style={styles.headerSection}>
           <Text style={styles.appTitle}>PicklePlay</Text>
@@ -56,6 +111,23 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     justifyContent: 'center',
+  },
+  clearSessionContainer: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 1,
+  },
+  clearSessionButton: {
+    backgroundColor: '#FF6B6B',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  clearSessionText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
   },
   headerSection: {
     alignItems: 'center',

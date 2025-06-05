@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, Text, StatusBar, TouchableOpacity, Alert, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, StatusBar, TouchableOpacity, Alert, Image, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, User, Clock, MapPin, Zap, FileText } from 'lucide-react-native';
 
@@ -22,7 +22,7 @@ interface UpcomingDetailsProps {
 const UpcomingDetails: React.FC<UpcomingDetailsProps> = ({ game, onBack, onCancelGame }) => {
   const formattedDateTime = gameService.formatGameDateTime(game.date, game.time);
 
-  // Placeholder images for profile pictures
+  // Placeholder images for profile pictures (fallback)
   const playerImages = [
     'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
     'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
@@ -32,7 +32,7 @@ const UpcomingDetails: React.FC<UpcomingDetailsProps> = ({ game, onBack, onCance
   const handleCancelGame = () => {
     Alert.alert(
       'Cancel Game',
-      `Are you sure you want to cancel this game with ${game.opponent_name}? They will be notified about the cancellation.`,
+      `Are you sure you want to cancel this game? The other players will be notified about the cancellation.`,
       [
         {
           text: 'Keep Game',
@@ -50,11 +50,81 @@ const UpcomingDetails: React.FC<UpcomingDetailsProps> = ({ game, onBack, onCance
     );
   };
 
-  // Player profile picture
+  // Get opponent information
+  const getOpponentInfo = () => {
+    if (game.creator) {
+      const creatorName = game.creator.full_name || 
+                         `${game.creator.first_name || ''} ${game.creator.last_name || ''}`.trim() || 
+                         'Unknown Player';
+      
+      const opponentImage = game.creator.avatar_url || playerImages[0];
+      
+      // For doubles games, show both players like in SearchScreen
+      if (game.game_type === 'doubles') {
+        // Check if partner info is in notes
+        if (game.original_game?.notes && game.original_game.notes.includes('with partner:')) {
+          const partnerMatch = game.original_game.notes.match(/with partner: (.+?)(?:\.|$)/);
+          if (partnerMatch && partnerMatch[1]) {
+            // Extract first names only for cleaner display
+            const creatorFirstName = game.creator.first_name || creatorName.split(' ')[0] || 'User';
+            const partnerFullName = partnerMatch[1].trim();
+            const partnerFirstName = partnerFullName.split(' ')[0] || 'Partner';
+            
+            return {
+              name: `${creatorFirstName} & ${partnerFirstName}`,
+              imageUrl: opponentImage
+            };
+          }
+        }
+        
+        // Fallback for doubles without partner info
+        return {
+          name: `${creatorName} (need partner)`,
+          imageUrl: opponentImage
+        };
+      }
+      
+      // For singles games, show creator name
+      return {
+        name: creatorName,
+        imageUrl: opponentImage
+      };
+    }
+    
+    // Fallback
+    return {
+      name: 'Opponent',
+      imageUrl: playerImages[0]
+    };
+  };
+
+  const opponentInfo = getOpponentInfo();
+
+  // Handle texting opponent
+  const handleTextOpponent = () => {
+    // For now, we'll show an alert since we don't have the opponent's phone number
+    // In a real app, we'd need to store and retrieve the opponent's contact info
+    Alert.alert(
+      'Contact Information',
+      `To contact ${opponentInfo.name}, please use the contact information they provided when creating the game.`,
+      [{ text: 'OK' }]
+    );
+    
+    // Future implementation when we have phone numbers:
+    // const phoneNumber = opponent.phone_number;
+    // if (phoneNumber) {
+    //   const url = `sms:${phoneNumber}`;
+    //   Linking.openURL(url).catch(err => {
+    //     Alert.alert('Error', 'Unable to open messaging app');
+    //   });
+    // }
+  };
+
+  // Player profile picture with real opponent photo
   const playerAvatarIcon = (
     <View style={styles.playerPictureContainer}>
       <Image
-        source={{ uri: playerImages[0] }}
+        source={{ uri: opponentInfo.imageUrl }}
         style={styles.playerPicture}
       />
     </View>
@@ -64,14 +134,14 @@ const UpcomingDetails: React.FC<UpcomingDetailsProps> = ({ game, onBack, onCance
   const getPlayerInfo = () => {
     if (game.game_type === 'singles') {
       return {
-        title: 'Opponent',
-        chip: game.opponent_name,
+        title: opponentInfo.name, // Use real opponent name
+        chip: 'Singles Game',
         backgroundColor: '#96BE6B' // Green for singles
       };
     } else {
       return {
-        title: 'Opponent',
-        chip: game.opponent_name,
+        title: opponentInfo.name, // Use real opponent name
+        chip: 'Doubles Game',
         backgroundColor: '#4DAAC2' // Blue for doubles
       };
     }
@@ -121,18 +191,9 @@ const UpcomingDetails: React.FC<UpcomingDetailsProps> = ({ game, onBack, onCance
         {/* Location Section */}
         <ListItem
           title="Location"
-          chips={[game.location || 'TBD']}
+          chips={[game.original_game?.venue_name || game.venue_name || 'TBD']}
           chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
           avatarIcon={<MapPin size={20} color="#000000" />}
-          style={styles.listItem}
-        />
-
-        {/* Level Section */}
-        <ListItem
-          title="Level"
-          chips={[game.opponent_level || 'Beginner']}
-          chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
-          avatarIcon={<Zap size={20} color="#000000" />}
           style={styles.listItem}
         />
 
@@ -150,8 +211,8 @@ const UpcomingDetails: React.FC<UpcomingDetailsProps> = ({ game, onBack, onCance
 
       {/* Text Player Button */}
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.textButton} onPress={() => console.log(`Text ${game.opponent_name}`)}>
-          <Text style={styles.textButtonText}>Text {game.opponent_name}</Text>
+        <TouchableOpacity style={styles.textButton} onPress={handleTextOpponent}>
+          <Text style={styles.textButtonText}>Text {opponentInfo.name}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

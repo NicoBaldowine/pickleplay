@@ -112,29 +112,39 @@ const SchedulesScreen: React.FC<SchedulesScreenProps> = ({ user, profile, onCrea
 
   // Sort schedules by date and time (earliest first)
   const sortedSchedules = userSchedules.sort((a, b) => {
-    const dateTimeA = new Date(`${a.date}T${a.time}`);
-    const dateTimeB = new Date(`${b.date}T${b.time}`);
+    const dateTimeA = new Date(`${a.scheduled_date}T${a.scheduled_time}`);
+    const dateTimeB = new Date(`${b.scheduled_date}T${b.scheduled_time}`);
     return dateTimeA.getTime() - dateTimeB.getTime();
   });
 
   const renderScheduleItem = (schedule: Game) => {
-    const dateTime = gameService.formatGameDateTime(schedule.date, schedule.time);
+    const dateTime = gameService.formatGameDateTime(schedule.scheduled_date, schedule.scheduled_time);
     
-    // Create chips array similar to SearchScreen
-    const gameTypeCapitalized = schedule.game_type.charAt(0).toUpperCase() + schedule.game_type.slice(1);
-    const skillLevelCapitalized = schedule.skill_level.charAt(0).toUpperCase() + schedule.skill_level.slice(1);
+    // Validar y capitalizar game_type y skill_level de manera segura
+    const gameTypeCapitalized = schedule.game_type ? 
+      schedule.game_type.charAt(0).toUpperCase() + schedule.game_type.slice(1) : 
+      'Unknown';
+
+    const skillLevelCapitalized = schedule.skill_level ? 
+      schedule.skill_level.charAt(0).toUpperCase() + schedule.skill_level.slice(1) : 
+      'Unknown';
+    
+    // Create location string from venue_name and city (same as HomeScreen)
+    const locationString = schedule.venue_name && schedule.city 
+      ? `${schedule.venue_name} - ${schedule.city}`
+      : (schedule.venue_name || 'No location');
     
     const chips = [
-      gameTypeCapitalized, // Game type
-      skillLevelCapitalized, // Level
-      schedule.location, // Location
+      gameTypeCapitalized,
+      skillLevelCapitalized,
+      locationString
     ];
     
     // Define chip background colors based on game type
     const chipBackgrounds = [
-      schedule.game_type === 'singles' ? '#96BE6B' : '#4DAAC2', // Game type chip - green for singles, blue for doubles
-      'rgba(0, 0, 0, 0.07)', // Level chip (default)
-      'rgba(0, 0, 0, 0.07)', // Location chip (default)
+      schedule.game_type === 'singles' ? '#96BE6B' : '#4DAAC2', // Game type chip
+      'rgba(0, 0, 0, 0.07)', // Level chip
+      'rgba(0, 0, 0, 0.07)', // Location chip
     ];
     
     // Always use Calendar icon for schedules

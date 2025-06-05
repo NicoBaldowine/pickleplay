@@ -1,361 +1,466 @@
 import { supabaseClient } from '../lib/supabase';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Database } from '../lib/database.types';
+import { authService } from './authService';
 
-// Define ENUM types based on your Supabase setup
+// Define types based on database schema
 export type GameType = 'singles' | 'doubles';
-export type PlayerLevel = 'beginner' | 'intermediate' | 'advanced' | 'pro'; // Adjust if your enum is different
-export type GameStatus = 'pending' | 'active' | 'completed' | 'cancelled';
+export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
+export type GameStatus = 'open' | 'full' | 'in_progress' | 'completed' | 'cancelled';
 
-export interface Court {
-  id: string;
-  name: string;
-  // Add other court properties if needed, e.g., address, number_of_courts
-  // For now, matching the dummy data structure and screenshot
-  distance?: string; // This seems to be display-only, not from DB in screenshot
-}
+// Use types from database
+export type Game = Database['public']['Tables']['games']['Row'];
+export type GameInsert = Database['public']['Tables']['games']['Insert'];
+export type GameUpdate = Database['public']['Tables']['games']['Update'];
+export type GameUser = Database['public']['Tables']['game_users']['Row'];
+export type Profile = Database['public']['Tables']['profiles']['Row'];
 
-export interface GameData {
-  game_type: 'singles' | 'doubles';
-  partner_name?: string;
-  player_level: string;
-  court_id: string;
-  scheduled_time: string;
-}
-
-export interface Game {
-  id: string;
-  creator_id: string;
-  creator_name: string;
-  creator_level: string;
-  partner_id?: string;
-  partner_name?: string;
-  partner_level?: string;
-  date: string;
-  time: string;
-  location: string;
-  court_number?: string;
-  game_type: 'singles' | 'doubles';
-  skill_level: string;
-  notes?: string;
-  status: 'open' | 'full' | 'completed' | 'cancelled';
-  created_at: string;
-  updated_at: string;
+export interface GameWithPlayers extends Game {
+  creator?: Profile;
+  players?: (GameUser & { profile?: Profile })[];
 }
 
 export interface UserGame {
   id: string;
-  opponent_name: string;
-  opponent_level: string;
+  venue_name: string;
+  skill_level: string;
   date: string;
   time: string;
   location: string;
   game_type: 'singles' | 'doubles';
   status: 'upcoming' | 'past';
-  result?: 'won' | 'lost';
+  players_count: string;
   original_game: Game;
+  creator?: Profile;
 }
 
 class GameService {
-  private readonly USER_GAMES_KEY = 'user_games';
-  private readonly USER_SCHEDULES_KEY = 'user_schedules';
+  private readonly tableName = 'games';
+  private readonly gameUsersTable = 'game_users';
 
-  // Create a new game (schedule)
-  async createGame(gameData: Omit<Game, 'id' | 'created_at' | 'updated_at' | 'status'>): Promise<{ success: boolean; gameId?: string; error?: string }> {
+  async createGame(gameData: GameInsert): Promise<{ success: boolean; gameId?: string; error?: string }> {
     try {
-      const gameWithDefaults = {
-        ...gameData,
-        status: 'open' as const,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      // Generate a random ID
-      const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const gameWithId = { ...gameWithDefaults, id: gameId };
-
-      // Save the created game as a user schedule
-      const currentUser = await this.getCurrentUser();
-      if (currentUser) {
-        await this.saveUserSchedule(currentUser.id, gameWithId);
+      // Get current user
+      const userResult = await supabaseClient.auth.getUser();
+      if (!userResult.data?.user) {
+        return { success: false, error: 'Session expired. Please log in again.' };
       }
 
-      console.log('Game created and saved as schedule:', gameWithId);
+      // Ensure creator_id is set
+      gameData.creator_id = userResult.data.user.id;
+
+      // Set defaults
+      gameData.max_players = gameData.max_players || 4;
+      gameData.current_players = gameData.current_players || 1;
+      gameData.status = gameData.status || 'open';
+      gameData.duration_minutes = gameData.duration_minutes || 90;
+
+      // Create the game using the insert method
+      const { data, error } = await supabaseClient.from(this.tableName).insert(gameData);
       
-      return { success: true, gameId };
-    } catch (error) {
-      console.error('Error creating game:', error);
-      return { success: false, error: 'Unexpected error occurred' };
-    }
-  }
-
-  // Helper method to get current user
-  private async getCurrentUser() {
-    try {
-      const { authService } = await import('./authService');
-      return await authService.getCurrentUser();
-    } catch (error) {
-      console.error('Error getting current user:', error);
-      return null;
-    }
-  }
-
-  // Save a schedule created by the user
-  private async saveUserSchedule(userId: string, schedule: Game): Promise<void> {
-    try {
-      const existingSchedules = await this.getUserSchedules(userId);
-      const updatedSchedules = [...existingSchedules, schedule];
-      
-      await AsyncStorage.setItem(
-        `${this.USER_SCHEDULES_KEY}_${userId}`,
-        JSON.stringify(updatedSchedules)
-      );
-    } catch (error) {
-      console.error('Error saving user schedule:', error);
-    }
-  }
-
-  // Get schedules created by the user
-  async getUserSchedules(userId: string): Promise<Game[]> {
-    try {
-      const userSchedulesString = await AsyncStorage.getItem(`${this.USER_SCHEDULES_KEY}_${userId}`);
-      if (userSchedulesString) {
-        const userSchedules: Game[] = JSON.parse(userSchedulesString);
-        return userSchedules;
+      if (error) {
+        console.error('Error creating game:', error);
+        return { success: false, error: error.message || 'Failed to create game' };
       }
-      return [];
-    } catch (error) {
-      console.error('Error fetching user schedules:', error);
-      return [];
-    }
-  }
-
-  // Get games created by current user
-  async getUserGames(userId: string): Promise<UserGame[]> {
-    try {
-      // Get user's accepted games from AsyncStorage
-      const userGamesString = await AsyncStorage.getItem(`${this.USER_GAMES_KEY}_${userId}`);
-      if (userGamesString) {
-        const userGames: UserGame[] = JSON.parse(userGamesString);
-        return userGames;
-      }
-      return [];
-    } catch (error) {
-      console.error('Error fetching user games:', error);
-      return [];
-    }
-  }
-
-  // Get available games created by other users (excluding current user's games)
-  async getAvailableGames(currentUserId: string): Promise<Game[]> {
-    try {
-      // Get today's date for relative dates
-      const today = new Date();
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const dayAfterTomorrow = new Date(today);
-      dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2);
-      const threeDaysFromNow = new Date(today);
-      threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
-      const fourDaysFromNow = new Date(today);
-      fourDaysFromNow.setDate(fourDaysFromNow.getDate() + 4);
-
-      // Format dates as YYYY-MM-DD
-      const formatDate = (date: Date) => date.toISOString().split('T')[0];
-
-      // Return mock games for testing - these represent games created by other users
-      const mockGames: Game[] = [
-        {
-          id: 'game_001',
-          creator_id: 'user_alex_001',
-          creator_name: 'Alex Rodriguez',
-          creator_level: 'Advanced',
-          date: formatDate(today),
-          time: '18:00',
-          location: 'Central Park Courts',
-          court_number: 'Court 3',
-          game_type: 'singles',
-          skill_level: 'Intermediate-Advanced',
-          notes: 'Looking for a competitive singles match!',
-          status: 'open',
-          created_at: '2025-01-20T10:00:00Z',
-          updated_at: '2025-01-20T10:00:00Z',
-        },
-        {
-          id: 'game_002',
-          creator_id: 'user_maria_002',
-          creator_name: 'Maria Garcia',
-          creator_level: 'Intermediate',
-          date: formatDate(tomorrow),
-          time: '17:30',
-          location: 'Riverside Recreation Center',
-          court_number: 'Court 1',
-          game_type: 'singles',
-          skill_level: 'Beginner-Intermediate',
-          notes: 'Casual game, all skill levels welcome',
-          status: 'open',
-          created_at: '2025-01-20T14:30:00Z',
-          updated_at: '2025-01-20T14:30:00Z',
-        },
-        {
-          id: 'game_003',
-          creator_id: 'user_john_003',
-          creator_name: 'John Smith',
-          creator_level: 'Advanced',
-          partner_id: 'user_jane_004',
-          partner_name: 'Jane Doe',
-          partner_level: 'Advanced',
-          date: formatDate(dayAfterTomorrow),
-          time: '19:00',
-          location: 'Downtown Sports Complex',
-          court_number: 'Court 2',
-          game_type: 'doubles',
-          skill_level: 'Advanced',
-          notes: 'Looking for another doubles team to play against',
-          status: 'open',
-          created_at: '2025-01-21T09:15:00Z',
-          updated_at: '2025-01-21T09:15:00Z',
-        },
-        {
-          id: 'game_004',
-          creator_id: 'user_sarah_005',
-          creator_name: 'Sarah Wilson',
-          creator_level: 'Beginner',
-          date: formatDate(threeDaysFromNow),
-          time: '16:00',
-          location: 'Community Center Courts',
-          court_number: 'Court 4',
-          game_type: 'doubles',
-          skill_level: 'Beginner-Intermediate',
-          notes: 'Need a partner for doubles - beginners welcome!',
-          status: 'open',
-          created_at: '2025-01-21T16:45:00Z',
-          updated_at: '2025-01-21T16:45:00Z',
-        },
-        {
-          id: 'game_005',
-          creator_id: 'user_mike_006',
-          creator_name: 'Mike Johnson',
-          creator_level: 'Expert',
-          date: formatDate(fourDaysFromNow),
-          time: '20:00',
-          location: 'Elite Pickleball Club',
-          court_number: 'Court 1',
-          game_type: 'singles',
-          skill_level: 'Expert',
-          notes: 'Advanced players only - tournament prep',
-          status: 'open',
-          created_at: '2025-01-22T11:20:00Z',
-          updated_at: '2025-01-22T11:20:00Z',
-        },
-      ];
-
-      // Get user's accepted games to filter them out
-      const userGames = await this.getUserGames(currentUserId);
-      const acceptedGameIds = userGames.map(ug => ug.original_game.id);
-
-      // Filter out games created by current user and already accepted games
-      return mockGames.filter(game => 
-        game.creator_id !== currentUserId && 
-        !acceptedGameIds.includes(game.id)
-      );
-    } catch (error) {
-      console.error('Error fetching available games:', error);
-      return [];
-    }
-  }
-
-  // Join a game (accept game)
-  async joinGame(gameId: string, userId: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      // Get the game details
-      const availableGames = await this.getAvailableGames(userId);
-      const game = availableGames.find(g => g.id === gameId);
       
-      if (!game) {
-        return { success: false, error: 'Game not found' };
+      if (!data || (Array.isArray(data) && data.length === 0)) {
+        return { success: false, error: 'No data returned after insert' };
       }
 
-      // Create a UserGame object
-      const userGame: UserGame = {
-        id: `user_game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        opponent_name: game.game_type === 'singles' 
-          ? game.creator_name 
-          : game.partner_name 
-            ? `${game.creator_name} & ${game.partner_name}`
-            : game.creator_name,
-        opponent_level: game.creator_level,
-        date: game.date,
-        time: game.time,
-        location: game.location,
-        game_type: game.game_type,
-        status: 'upcoming',
-        original_game: game,
-      };
+      const game = Array.isArray(data) ? data[0] : data;
 
-      // Get existing user games
-      const existingGames = await this.getUserGames(userId);
-      
-      // Add the new game
-      const updatedGames = [...existingGames, userGame];
-      
-      // Save to AsyncStorage
-      await AsyncStorage.setItem(
-        `${this.USER_GAMES_KEY}_${userId}`, 
-        JSON.stringify(updatedGames)
-      );
-
-      console.log(`User ${userId} successfully joined game ${gameId}`);
-      return { success: true };
-    } catch (error) {
-      console.error('Error joining game:', error);
-      return { success: false, error: 'Failed to join game' };
-    }
-  }
-
-  // Format date and time for display
-  formatGameDateTime(date: string, time: string): string {
-    try {
-      const gameDate = new Date(`${date}T${time}`);
-      const now = new Date();
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      const isToday = gameDate.toDateString() === now.toDateString();
-      const isTomorrow = gameDate.toDateString() === tomorrow.toDateString();
-
-      const timeStr = gameDate.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
+      // Add creator as first player
+      const { error: playerError } = await supabaseClient.from(this.gameUsersTable).insert({
+        game_id: game.id,
+        user_id: userResult.data.user.id,
+        role: 'creator',
+        status: 'confirmed'
       });
 
-      if (isToday) {
-        return `Today at ${timeStr}`;
-      } else if (isTomorrow) {
-        return `Tomorrow at ${timeStr}`;
-      } else {
-        const dateStr = gameDate.toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric' 
-        });
-        return `${dateStr} at ${timeStr}`;
+      if (playerError) {
+        console.error('Error adding creator as player:', playerError);
+        // Don't fail the whole operation, game was created
       }
+
+      console.log('Game created successfully:', game.id);
+      return { success: true, gameId: game.id };
     } catch (error) {
-      return `${date} at ${time}`;
+      console.error('Error creating game:', error);
+      const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+      return { success: false, error: message };
     }
   }
 
-  // Get game type display text
-  getGameTypeDisplay(game: Game): string {
-    if (game.game_type === 'singles') {
-      return `Singles vs ${game.creator_name}`;
-    } else {
-      if (game.partner_name) {
-        return `Doubles vs ${game.creator_name} & ${game.partner_name}`;
-      } else {
-        return `Doubles with ${game.creator_name} (need partner)`;
+  async getUserSchedules(userId: string): Promise<GameWithPlayers[]> {
+    try {
+      // Get games where user is creator
+      const createdGamesResult = await supabaseClient.query(this.tableName, {
+        select: '*',
+        filters: { creator_id: userId },
+        orderBy: 'scheduled_date.asc'
+      });
+
+      if (createdGamesResult.error) {
+        console.error('Error fetching created games:', createdGamesResult.error);
+        throw createdGamesResult.error;
       }
+
+      const createdGames = createdGamesResult.data || [];
+
+      // Get games where user is a participant
+      const participantGamesResult = await supabaseClient.query(this.gameUsersTable, {
+        select: 'game_id',
+        filters: { user_id: userId }
+      });
+
+      if (participantGamesResult.error) {
+        console.error('Error fetching participant games:', participantGamesResult.error);
+        throw participantGamesResult.error;
+      }
+
+      const participantGames = participantGamesResult.data || [];
+      const gameIds = participantGames.map((p: any) => p.game_id);
+      
+      let joinedGames: Game[] = [];
+      if (gameIds.length > 0) {
+        // Fetch each joined game individually (since 'in' is not supported)
+        const gamePromises = gameIds.map((gameId: string) =>
+          supabaseClient.query(this.tableName, {
+            select: '*',
+            filters: { id: gameId }
+          })
+        );
+
+        const gameResults = await Promise.all(gamePromises);
+        joinedGames = gameResults
+          .filter(result => !result.error && result.data)
+          .map(result => result.data)
+          .flat();
+      }
+
+      // Combine and deduplicate
+      const allGames = [...createdGames, ...joinedGames];
+      const uniqueGames = allGames.filter((game, index, self) => 
+        index === self.findIndex((g) => g.id === game.id)
+      );
+
+      return uniqueGames;
+    } catch (error) {
+      console.error('Error fetching user schedules:', error);
+      throw error;
     }
+  }
+
+  async getUserGames(userId: string): Promise<UserGame[]> {
+    try {
+      // Get only games where user joined (not games they created)
+      const joinedGames = await this.getUserJoinedGames(userId);
+      
+      // Fetch creator profiles for all games
+      const gamesWithCreators = await Promise.all(
+        joinedGames.map(async (game) => {
+          // Fetch creator profile
+          const creatorResult = await supabaseClient.query('profiles', {
+            select: '*',
+            filters: { id: game.creator_id },
+            single: true
+          });
+
+          const userGame: UserGame = {
+            id: game.id,
+            venue_name: game.venue_name,
+            skill_level: game.skill_level,
+            date: game.scheduled_date,
+            time: game.scheduled_time,
+            location: `${game.venue_address}, ${game.city}`,
+            game_type: game.game_type,
+            status: new Date(`${game.scheduled_date}T${game.scheduled_time}`) > new Date() ? 'upcoming' : 'past',
+            players_count: `${game.current_players}/${game.max_players}`,
+            original_game: game,
+            creator: creatorResult.data || undefined // Add creator profile data
+          };
+          return userGame;
+        })
+      );
+
+      return gamesWithCreators;
+    } catch (error) {
+      console.error('Error fetching user games:', error);
+      throw error;
+    }
+  }
+
+  async getUserJoinedGames(userId: string): Promise<Game[]> {
+    try {
+      // Get games where user is a participant (not creator)
+      const participantGamesResult = await supabaseClient.query(this.gameUsersTable, {
+        select: 'game_id',
+        filters: { user_id: userId }
+      });
+
+      if (participantGamesResult.error) {
+        console.error('Error fetching participant games:', participantGamesResult.error);
+        throw participantGamesResult.error;
+      }
+
+      const participantGames = participantGamesResult.data || [];
+      const gameIds = participantGames.map((p: any) => p.game_id);
+      
+      let joinedGames: Game[] = [];
+      if (gameIds.length > 0) {
+        // Fetch each joined game individually
+        const gamePromises = gameIds.map((gameId: string) =>
+          supabaseClient.query(this.tableName, {
+            select: '*',
+            filters: { id: gameId }
+          })
+        );
+
+        const gameResults = await Promise.all(gamePromises);
+        joinedGames = gameResults
+          .filter(result => !result.error && result.data)
+          .map(result => result.data)
+          .flat();
+
+        // Filter out games where the user is the creator (we only want joined games)
+        joinedGames = joinedGames.filter((game: Game) => game.creator_id !== userId);
+      }
+
+      return joinedGames.sort((a, b) => {
+        const dateA = new Date(`${a.scheduled_date}T${a.scheduled_time}`);
+        const dateB = new Date(`${b.scheduled_date}T${b.scheduled_time}`);
+        return dateB.getTime() - dateA.getTime(); // Most recent first
+      });
+    } catch (error) {
+      console.error('Error fetching user joined games:', error);
+      throw error;
+    }
+  }
+
+  async deleteSchedule(scheduleId: string, userId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Delete from games table (will cascade to game_users)
+      const { error } = await supabaseClient.from(this.tableName).delete().eq('id', scheduleId);
+
+      if (error) {
+        console.error('Error deleting schedule:', error);
+        return { success: false, error: error.message || 'Failed to delete schedule' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting schedule:', error);
+      const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+      return { success: false, error: message };
+    }
+  }
+
+  async getAvailableGames(excludeUserId: string): Promise<GameWithPlayers[]> {
+    try {
+      // Get all open games
+      const result = await supabaseClient.query(this.tableName, {
+        select: '*',
+        filters: { status: 'open' },
+        orderBy: 'scheduled_date.asc'
+      });
+
+      if (result.error) {
+        console.error('Error fetching available games:', result.error);
+        throw result.error;
+      }
+
+      const games = result.data || [];
+      
+      // Filter out games created by current user
+      const availableGames = games.filter((game: Game) => game.creator_id !== excludeUserId);
+
+      return availableGames;
+    } catch (error) {
+      console.error('Error fetching available games:', error);
+      throw error;
+    }
+  }
+
+  async joinGame(gameId: string, userId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      // First check if user session is valid
+      const userResult = await supabaseClient.auth.getUser();
+      if (!userResult.data?.user) {
+        return { success: false, error: 'Session expired. Please log in again.' };
+      }
+
+      // Check if user is already in the game
+      const existingResult = await supabaseClient.query(this.gameUsersTable, {
+        select: 'id',
+        filters: [
+          ['game_id', gameId],
+          ['user_id', userId]
+        ],
+        single: true
+      });
+
+      if (existingResult.data) {
+        return { success: false, error: 'You are already in this game' };
+      }
+
+      // First attempt - Add user to game
+      const { error } = await supabaseClient.from(this.gameUsersTable).insert({
+        game_id: gameId,
+        user_id: userId,
+        role: 'player',
+        status: 'confirmed'
+      });
+
+      if (error) {
+        console.error('Error joining game:', error);
+        
+        // Check for JWT expired errors and attempt refresh
+        if (error.message?.includes('JWT expired') || error.code === 'PGRST301') {
+          console.log('🔄 JWT expired, attempting to refresh session...');
+          
+          // Try to refresh session
+          const refreshResult = await authService.refreshSession();
+          if (refreshResult.success) {
+            console.log('✅ Session refreshed, retrying join game...');
+            
+            // Retry adding user to game with fresh token
+            const { error: retryError } = await supabaseClient.from(this.gameUsersTable).insert({
+              game_id: gameId,
+              user_id: userId,
+              role: 'player',
+              status: 'confirmed'
+            });
+            
+            if (retryError) {
+              console.error('Error joining game after refresh:', retryError);
+              return { success: false, error: retryError.message || 'Failed to join game after refresh' };
+            }
+            
+            console.log('✅ Successfully joined game after session refresh');
+          } else {
+            console.log('❌ Session refresh failed:', refreshResult.error);
+            return { success: false, error: 'Session expired and could not be refreshed. Please log in again.' };
+          }
+        } else {
+          return { success: false, error: error.message || 'Failed to join game' };
+        }
+      }
+
+      // Update current_players count
+      // Note: We'd need to implement an RPC function for this in Supabase
+      // For now, we'll do it manually by getting the game, incrementing, and updating
+      const gameResult = await supabaseClient.query(this.tableName, {
+        select: 'current_players',
+        filters: [['id', gameId]],
+        single: true
+      });
+
+      if (gameResult.data) {
+        const newCount = (gameResult.data.current_players || 0) + 1;
+        await supabaseClient.from(this.tableName).update({ current_players: newCount }).eq('id', gameId);
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error joining game:', error);
+      
+      // Check for JWT expired errors in catch block and attempt refresh
+      if (error && 
+          (error.code === 'PGRST301' || error.message?.includes('JWT expired'))) {
+        console.log('🔄 JWT expired in catch block, attempting to refresh session...');
+        
+        try {
+          const refreshResult = await authService.refreshSession();
+          if (refreshResult.success) {
+            console.log('✅ Session refreshed in catch block, retrying join game...');
+            
+            // Retry the entire operation
+            const { error: retryError } = await supabaseClient.from(this.gameUsersTable).insert({
+              game_id: gameId,
+              user_id: userId,
+              role: 'player',
+              status: 'confirmed'
+            });
+            
+            if (retryError) {
+              return { success: false, error: retryError.message || 'Failed to join game after refresh' };
+            }
+            
+            // Update current_players count for retry
+            const gameResult = await supabaseClient.query(this.tableName, {
+              select: 'current_players',
+              filters: [['id', gameId]],
+              single: true
+            });
+
+            if (gameResult.data) {
+              const newCount = (gameResult.data.current_players || 0) + 1;
+              await supabaseClient.from(this.tableName).update({ current_players: newCount }).eq('id', gameId);
+            }
+            
+            return { success: true };
+          } else {
+            return { success: false, error: 'Session expired and could not be refreshed. Please log in again.' };
+          }
+        } catch (refreshError) {
+          return { success: false, error: 'Session expired and refresh failed. Please log in again.' };
+        }
+      }
+      
+      // For non-JWT errors
+      const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+      return { success: false, error: message };
+    }
+  }
+
+  async cancelGame(gameId: string, userId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Remove user from game
+      const { error } = await supabaseClient.from(this.gameUsersTable).delete().eq('game_id', gameId);
+
+      if (error) {
+        console.error('Error leaving game:', error);
+        return { success: false, error: error.message || 'Failed to leave game' };
+      }
+
+      // Update current_players count
+      const gameResult = await supabaseClient.query(this.tableName, {
+        select: 'current_players',
+        filters: [['id', gameId]],
+        single: true
+      });
+
+      if (gameResult.data) {
+        const newCount = Math.max((gameResult.data.current_players || 1) - 1, 0);
+        await supabaseClient.from(this.tableName).update({ current_players: newCount }).eq('id', gameId);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error canceling game:', error);
+      const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+      return { success: false, error: message };
+    }
+  }
+
+  // Helper methods
+  formatGameDateTime(date: string, time: string): string {
+    try {
+      const dateObj = new Date(`${date}T${time}`);
+      return dateObj.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting date time:', error);
+      return 'Invalid date';
+    }
+  }
+
+  getGameTypeDisplay(game: Game): string {
+    return `${game.game_type.charAt(0).toUpperCase() + game.game_type.slice(1)} - ${game.skill_level}`;
   }
 
   // Get user initials for avatar
@@ -369,55 +474,119 @@ class GameService {
     return 'U';
   }
 
-  // Cancel a game (remove from user's games)
-  async cancelGame(gameId: string, userId: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      // Get existing user games
-      const existingGames = await this.getUserGames(userId);
-      
-      // Filter out the cancelled game
-      const updatedGames = existingGames.filter(game => game.id !== gameId);
-      
-      // Save updated list to AsyncStorage
-      await AsyncStorage.setItem(
-        `${this.USER_GAMES_KEY}_${userId}`, 
-        JSON.stringify(updatedGames)
-      );
-
-      console.log(`User ${userId} successfully cancelled game ${gameId}`);
-      return { success: true };
-    } catch (error) {
-      console.error('Error cancelling game:', error);
-      return { success: false, error: 'Failed to cancel game' };
-    }
-  }
-
-  // Delete a schedule (remove from user's schedules)
-  async deleteSchedule(scheduleId: string, userId: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      // Get existing user schedules
-      const existingSchedules = await this.getUserSchedules(userId);
-      
-      // Filter out the deleted schedule
-      const updatedSchedules = existingSchedules.filter(schedule => schedule.id !== scheduleId);
-      
-      // Save updated list to AsyncStorage
-      await AsyncStorage.setItem(
-        `${this.USER_SCHEDULES_KEY}_${userId}`, 
-        JSON.stringify(updatedSchedules)
-      );
-
-      console.log(`User ${userId} successfully deleted schedule ${scheduleId}`);
-      return { success: true };
-    } catch (error) {
-      console.error('Error deleting schedule:', error);
-      return { success: false, error: 'Failed to delete schedule' };
-    }
-  }
-
   // Get avatar background color based on game type
-  getAvatarBackgroundColor(gameType: 'singles' | 'doubles'): string {
+  getAvatarBackgroundColor(gameType: GameType): string {
     return gameType === 'singles' ? '#96BE6B' : '#43A4BE';
+  }
+
+  async getGameWithDetails(gameId: string): Promise<GameWithPlayers | null> {
+    try {
+      // Get the game
+      const gameResult = await supabaseClient.query(this.tableName, {
+        select: '*',
+        filters: { id: gameId },
+        single: true
+      });
+
+      if (gameResult.error || !gameResult.data) {
+        console.error('Error fetching game:', gameResult.error);
+        return null;
+      }
+
+      const game = gameResult.data;
+
+      // Get creator profile
+      const creatorResult = await supabaseClient.query('profiles', {
+        select: '*',
+        filters: { id: game.creator_id },
+        single: true
+      });
+
+      // Get all players
+      const playersResult = await supabaseClient.query(this.gameUsersTable, {
+        select: '*',
+        filters: { game_id: gameId }
+      });
+
+      const players = playersResult.data || [];
+
+      // Get profiles for all players
+      const playerProfiles = await Promise.all(
+        players.map(async (player: GameUser) => {
+          const profileResult = await supabaseClient.query('profiles', {
+            select: '*',
+            filters: { id: player.user_id },
+            single: true
+          });
+          return {
+            ...player,
+            profile: profileResult.data
+          };
+        })
+      );
+
+      return {
+        ...game,
+        creator: creatorResult.data,
+        players: playerProfiles
+      };
+    } catch (error) {
+      console.error('Error fetching game with details:', error);
+      return null;
+    }
+  }
+
+  // Helper to get display name for game
+  async getGameDisplayName(game: GameWithPlayers): Promise<string> {
+    if (!game.creator) return 'Unknown Player';
+    
+    const creatorName = game.creator.full_name || 
+                       `${game.creator.first_name || ''} ${game.creator.last_name || ''}`.trim() || 
+                       'Unknown Player';
+
+    if (game.game_type === 'singles') {
+      return creatorName;
+    } else {
+      // For doubles, check if we have other players
+      const otherPlayers = game.players?.filter(p => p.user_id !== game.creator_id) || [];
+      if (otherPlayers.length > 0 && otherPlayers[0].profile) {
+        const partnerName = otherPlayers[0].profile.full_name || 
+                           `${otherPlayers[0].profile.first_name || ''} ${otherPlayers[0].profile.last_name || ''}`.trim() || 
+                           'Partner';
+        return `${creatorName} & ${partnerName}`;
+      }
+      
+      // If no registered players, check if partner info is in notes or game data
+      // Look for partner info in game notes (legacy support)
+      if (game.notes && game.notes.includes('with partner:')) {
+        const partnerMatch = game.notes.match(/with partner: (.+?)(?:\.|$)/);
+        if (partnerMatch && partnerMatch[1]) {
+          return `${creatorName} & ${partnerMatch[1].trim()}`;
+        }
+      }
+      
+      // TODO: In the future, we could also check double_partners table here
+      // if we store partner_id reference in the game record
+      
+      return `${creatorName} (need partner)`;
+    }
+  }
+
+  // Update getAvailableGames to include player details
+  async getAvailableGamesWithDetails(excludeUserId: string): Promise<GameWithPlayers[]> {
+    try {
+      const games = await this.getAvailableGames(excludeUserId);
+      
+      // Fetch details for each game
+      const gamesWithDetails = await Promise.all(
+        games.map(game => this.getGameWithDetails(game.id))
+      );
+
+      return gamesWithDetails.filter(game => game !== null) as GameWithPlayers[];
+    } catch (error) {
+      console.error('Error fetching available games with details:', error);
+      throw error;
+    }
   }
 }
 

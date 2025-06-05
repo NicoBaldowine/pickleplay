@@ -12,10 +12,10 @@ import ListItem from '../components/ui/ListItem';
 import { COLORS } from '../constants/colors';
 
 // Import game service and types
-import { Game, gameService } from '../services/gameService';
+import { GameWithPlayers, gameService } from '../services/gameService';
 
 interface FindDetailsProps {
-  game: Game;
+  game: GameWithPlayers;
   user: any;
   profile: any;
   onBack: () => void;
@@ -23,7 +23,7 @@ interface FindDetailsProps {
 }
 
 const FindDetails: React.FC<FindDetailsProps> = ({ game, user, profile, onBack, onAcceptGame }) => {
-  const formattedDateTime = gameService.formatGameDateTime(game.date, game.time);
+  const formattedDateTime = gameService.formatGameDateTime(game.scheduled_date, game.scheduled_time);
   const navigation = useNavigation();
 
   // Placeholder images for profile pictures
@@ -49,7 +49,7 @@ const FindDetails: React.FC<FindDetailsProps> = ({ game, user, profile, onBack, 
   const playerAvatarIcon = (
     <View style={styles.playerPictureContainer}>
       <Image
-        source={{ uri: playerImages[0] }}
+        source={{ uri: game.creator?.avatar_url || playerImages[0] }}
         style={styles.playerPicture}
       />
     </View>
@@ -57,31 +57,60 @@ const FindDetails: React.FC<FindDetailsProps> = ({ game, user, profile, onBack, 
 
   // Player information based on game type
   const getPlayerInfo = () => {
-    if (game.game_type === 'singles') {
-      return {
-        title: 'Player',
-        chip: game.creator_name,
-        backgroundColor: '#FFC738' // Yellow for singles
-      };
-    } else {
-      // Doubles game
-      if (game.partner_name) {
-        return {
-          title: 'Player',
-          chip: `${game.creator_name} & ${game.partner_name}`,
-          backgroundColor: '#FF9442' // Orange for doubles
-        };
+    // Use synchronous display name logic (same as SearchScreen)
+    const getDisplayName = () => {
+      if (!game.creator) return 'Unknown Player';
+      
+      const creatorName = game.creator.full_name || 
+                         `${game.creator.first_name || ''} ${game.creator.last_name || ''}`.trim() || 
+                         'Unknown Player';
+
+      if (game.game_type === 'singles') {
+        return creatorName;
       } else {
-        return {
-          title: 'Player',
-          chip: `${game.creator_name} (need partner)`,
-          backgroundColor: '#FF9442' // Orange for doubles
-        };
+        // For doubles, check if partner info is in notes
+        if (game.notes && game.notes.includes('with partner:')) {
+          const partnerMatch = game.notes.match(/with partner: (.+?)(?:\.|$)/);
+          if (partnerMatch && partnerMatch[1]) {
+            // Extract first names only for cleaner display
+            const creatorFirstName = game.creator.first_name || creatorName.split(' ')[0] || 'User';
+            const partnerFullName = partnerMatch[1].trim();
+            const partnerFirstName = partnerFullName.split(' ')[0] || 'Partner';
+            return `${creatorFirstName} & ${partnerFirstName}`;
+          }
+        }
+        
+        // Check if we have other registered players
+        const otherPlayers = game.players?.filter(p => p.user_id !== game.creator_id) || [];
+        if (otherPlayers.length > 0 && otherPlayers[0].profile) {
+          const creatorFirstName = game.creator.first_name || creatorName.split(' ')[0] || 'User';
+          const partnerName = otherPlayers[0].profile.full_name || 
+                             `${otherPlayers[0].profile.first_name || ''} ${otherPlayers[0].profile.last_name || ''}`.trim() || 
+                             'Partner';
+          const partnerFirstName = otherPlayers[0].profile.first_name || partnerName.split(' ')[0] || 'Partner';
+          return `${creatorFirstName} & ${partnerFirstName}`;
+        }
+        
+        return `${creatorName} (need partner)`;
       }
-    }
+    };
+    
+    const displayName = getDisplayName();
+    const backgroundColor = game.game_type === 'singles' ? '#FFC738' : '#FF9442';
+    
+    return {
+      title: 'Player',
+      chip: displayName,
+      backgroundColor
+    };
   };
 
   const playerInfo = getPlayerInfo();
+
+  // Get creator name for notes
+  const creatorName = game.creator?.full_name || 
+                     `${game.creator?.first_name || ''} ${game.creator?.last_name || ''}`.trim() || 
+                     'Player';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}>
@@ -120,8 +149,8 @@ const FindDetails: React.FC<FindDetailsProps> = ({ game, user, profile, onBack, 
 
         {/* Locations Section */}
         <ListItem
-          title="Locations"
-          chips={[game.location]}
+          title="Location"
+          chips={[game.venue_name]}
           chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
           avatarIcon={<MapPin size={20} color="#000000" />}
           style={styles.listItem}
@@ -139,7 +168,7 @@ const FindDetails: React.FC<FindDetailsProps> = ({ game, user, profile, onBack, 
         {/* Player Notes Section */}
         {game.notes && (
           <ListItem
-            title={`${game.creator_name} Notes`}
+            title={`${creatorName} Notes`}
             chips={[game.notes]}
             chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
             avatarIcon={<FileText size={20} color="#000000" />}

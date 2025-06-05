@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text } from 'react-native';
+import { StyleSheet, View, Text, Alert } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -9,6 +9,8 @@ import { registerRootComponent } from 'expo';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { Search, Calendar, Trophy, User, Home } from 'lucide-react-native';
+import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Import fonts
 import { fonts, fontFamily } from './src/config/fonts';
@@ -30,15 +32,19 @@ import UpcomingDetails from './src/screens/UpcomingDetails';
 import ProfileScreen from './src/screens/ProfileScreen';
 import ManageNotificationsScreen from './src/screens/ManageNotificationsScreen';
 import ManageDoublePartnersScreen from './src/screens/ManageDoublePartnersScreen';
+import FilterScreen from './src/screens/FilterScreen';
+import CreatePartnerScreen from './src/screens/CreatePartnerScreen';
+import EditPartnerScreen from './src/screens/EditPartnerScreen';
 
 // Import the CreateGameFlow component
 import CreateGameFlow from './src/components/create_game_flow/CreateGameFlow';
 
 // Import the AuthFlow component
-import AuthFlow from './src/components/auth_flow/AuthFlow';
+import AuthFlow from './src/screens/auth/AuthFlow';
 
 // Import auth service and types
 import { authService } from './src/services/authService';
+import { gameService } from './src/services/gameService';
 import { Profile } from './src/lib/supabase';
 
 // Import UI components for fallback CreateScreen
@@ -53,6 +59,15 @@ const MainStack = createNativeStackNavigator();
 const ACTIVE_COLOR = COLORS.TEXT_PRIMARY;
 const INACTIVE_COLOR = COLORS.TEXT_SECONDARY;
 
+const linking = {
+  prefixes: [Linking.createURL('/')],
+  config: {
+    screens: {
+      ResetPassword: 'reset-password',
+    },
+  },
+};
+
 // ScheduleDetails wrapper for navigation
 function ScheduleDetailsWrapper({ route, navigation, setScheduleRefreshTrigger }: any) {
   const { schedule, user, onRefresh } = route.params;
@@ -65,7 +80,6 @@ function ScheduleDetailsWrapper({ route, navigation, setScheduleRefreshTrigger }
     if (!user?.id) return;
 
     try {
-      const { gameService } = await import('./src/services/gameService');
       const result = await gameService.deleteSchedule(scheduleId, user.id);
       if (result.success) {
         console.log('Schedule deleted successfully!');
@@ -108,11 +122,8 @@ function FindDetailsWrapper({ route, navigation, setGamesRefreshTrigger, user, p
 
   const handleAcceptGame = async (gameId: string, shouldNavigateToGames: boolean = false) => {
     try {
-      const { authService } = await import('./src/services/authService');
-      const { gameService } = await import('./src/services/gameService');
-      
       const currentUser = await authService.getCurrentUser();
-      if (currentUser) {
+      if (currentUser && profile) {
         const result = await gameService.joinGame(gameId, currentUser.id);
         if (result.success) {
           console.log('Game accepted successfully!');
@@ -180,12 +191,9 @@ function FindReviewWrapper({ route, navigation, setGamesRefreshTrigger, user, pr
 
   const handleAcceptGame = async (gameId: string, phoneNumber: string, notes?: string) => {
     try {
-      const { authService } = await import('./src/services/authService');
-      const { gameService } = await import('./src/services/gameService');
-      
       const currentUser = await authService.getCurrentUser();
-      if (currentUser) {
-        // Here you could save phone number and notes to user profile if needed
+      if (currentUser && profile) {
+        // Note: phoneNumber and notes are collected in UI but joinGame only needs gameId and userId
         const result = await gameService.joinGame(gameId, currentUser.id);
         if (result.success) {
           console.log('Game accepted successfully!');
@@ -193,14 +201,60 @@ function FindReviewWrapper({ route, navigation, setGamesRefreshTrigger, user, pr
           // Trigger games refresh
           setGamesRefreshTrigger((prev: number) => prev + 1);
           
-          // Navigate to Games tab
-          navigation.navigate('TabNavigator', { screen: 'Games' });
+          // Show success alert and navigate to Games
+          Alert.alert(
+            'Game Accepted!',
+            `You've successfully joined the game. The game details have been added to your Games tab.`,
+            [
+              {
+                text: 'View My Games',
+                onPress: () => {
+                  // Navigate to Games tab
+                  navigation.navigate('TabNavigator', { screen: 'Games' });
+                },
+              },
+            ],
+            { cancelable: false }
+          );
         } else {
           console.error('Failed to accept game:', result.error);
+          
+          // Check if the error is about session expiration
+          if (result.error?.includes('Session expired') || result.error?.includes('JWT expired')) {
+            Alert.alert(
+              'Session Expired',
+              'Your session has expired. Please log in again to continue.',
+              [
+                { text: 'OK', onPress: () => {
+                  // Navigate back to previous screen
+                  navigation.goBack();
+                }}
+              ]
+            );
+          } else {
+            Alert.alert('Error', result.error || 'Failed to join the game. Please try again.');
+          }
         }
+      } else {
+        Alert.alert('Error', 'Please log in to join games.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error accepting game:', error);
+      
+      // Check for JWT expired in catch block too
+      if (error.message?.includes('JWT expired') || error.message?.includes('Session expired')) {
+        Alert.alert(
+          'Session Expired',
+          'Your session has expired. Please log in again to continue.',
+          [
+            { text: 'OK', onPress: () => {
+              navigation.goBack();
+            }}
+          ]
+        );
+      } else {
+        Alert.alert('Error', error.message || 'Something went wrong. Please try again.');
+      }
     }
   };
 
@@ -225,9 +279,6 @@ function UpcomingDetailsWrapper({ route, navigation, setGamesRefreshTrigger }: a
 
   const handleCancelGame = async (gameId: string) => {
     try {
-      const { authService } = await import('./src/services/authService');
-      const { gameService } = await import('./src/services/gameService');
-      
       const currentUser = await authService.getCurrentUser();
       if (currentUser) {
         const result = await gameService.cancelGame(gameId, currentUser.id);
@@ -268,8 +319,41 @@ function ProfileScreenWrapper({ route, navigation }: any) {
 
   const handleSaveProfile = async (updatedProfile: Partial<Profile>) => {
     try {
-      // TODO: Implement actual profile update logic with authService
       console.log('Saving profile:', updatedProfile);
+      
+      // Get current user - with fallback to props user
+      let currentUser = await authService.getCurrentUser();
+      
+      // If getCurrentUser fails, use the user from props as fallback
+      if (!currentUser && user?.id) {
+        console.log('⚠️ getCurrentUser returned null, using user from props as fallback');
+        currentUser = user;
+      }
+      
+      // If user.id is still undefined, try to use profile.id as ultimate fallback
+      if ((!currentUser || !currentUser.id) && profile?.id) {
+        console.log('⚠️ User ID is undefined, using profile.id as fallback');
+        currentUser = { ...currentUser, id: profile.id };
+      }
+      
+      if (!currentUser || !currentUser.id) {
+        console.error('❌ No valid user found for profile update');
+        throw new Error('No valid session found. Please log in again.');
+      }
+      
+      console.log('✅ Using user for profile update:', currentUser.id);
+      
+      // Update profile using authService
+      const result = await authService.updateProfile(currentUser.id, updatedProfile);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update profile');
+      }
+      
+      console.log('✅ Profile updated successfully');
+      
+      // The auth state listener will automatically refresh the profile data
+      
       if (onSaveProfile) {
         await onSaveProfile(updatedProfile);
       }
@@ -308,35 +392,138 @@ function ManageDoublePartnersScreenWrapper({ route, navigation }: any) {
     navigation.goBack();
   };
 
-  const handleCreateNewPartner = () => {
-    // TODO: Navigate to CreatePartnerStep or similar
-    console.log('Create new partner pressed');
+  const handleNavigateToCreatePartner = () => {
+    navigation.navigate('CreatePartner');
   };
 
-  const handleSelectPartner = (partnerName: string) => {
-    // TODO: Handle partner selection
-    console.log('Selected partner:', partnerName);
+  const handleNavigateToEditPartner = (partner: any) => {
+    navigation.navigate('EditPartner', { partner });
   };
 
   return (
     <ManageDoublePartnersScreen
       onBack={handleBack}
-      onCreateNewPartner={handleCreateNewPartner}
-      onSelectPartner={handleSelectPartner}
+      onNavigateToCreatePartner={handleNavigateToCreatePartner}
+      onNavigateToEditPartner={handleNavigateToEditPartner}
+    />
+  );
+}
+
+// CreatePartnerScreen wrapper for navigation
+function CreatePartnerScreenWrapper({ route, navigation }: any) {
+  const handleBack = () => {
+    navigation.goBack();
+  };
+
+  const handlePartnerCreated = () => {
+    // Navigate back and refresh the calling screen
+    navigation.goBack();
+  };
+
+  return (
+    <CreatePartnerScreen
+      onBack={handleBack}
+      onPartnerCreated={handlePartnerCreated}
+    />
+  );
+}
+
+// FilterScreen wrapper for navigation
+function FilterScreenWrapper({ route, navigation }: any) {
+  const { filters } = route.params;
+  
+  const handleBack = () => {
+    navigation.goBack();
+  };
+
+  const handleApplyFilters = (newFilters: any) => {
+    // Use setParams to return the filters to the calling screen
+    navigation.navigate({
+      name: 'TabNavigator',
+      params: { 
+        screen: 'Search',
+        params: { appliedFilters: newFilters }
+      },
+      merge: true,
+    });
+  };
+
+  return (
+    <FilterScreen
+      filters={filters}
+      onBack={handleBack}
+      onApplyFilters={handleApplyFilters}
+    />
+  );
+}
+
+// EditPartnerScreen wrapper for navigation
+function EditPartnerScreenWrapper({ route, navigation }: any) {
+  const { partner } = route.params;
+  
+  const handleBack = () => {
+    navigation.goBack();
+  };
+
+  const handlePartnerUpdated = () => {
+    // Navigate back and refresh the calling screen
+    navigation.goBack();
+  };
+
+  return (
+    <EditPartnerScreen
+      partner={partner}
+      onBack={handleBack}
+      onPartnerUpdated={handlePartnerUpdated}
     />
   );
 }
 
 // Tab Navigator Component
-function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefreshTrigger, onNavigateToSchedules, onNavigateToGames, onSignOut, navigationRef }: any) {
+function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefreshTrigger, onNavigateToSchedules, onNavigateToGames, onSignOut, navigationRef, onProfileUpdate }: any) {
   
   const handleNavigateToProfile = () => {
     navigationRef.current?.navigate('Profile', { 
       user, 
       profile,
       onSaveProfile: async (updatedProfile: Partial<Profile>) => {
-        // TODO: Implement profile update logic
-        console.log('Saving profile:', updatedProfile);
+        try {
+          console.log('📋 TabNavigator - Saving profile:', updatedProfile);
+          
+          // Get current user
+          let currentUser = await authService.getCurrentUser();
+          
+          // Fallbacks for user ID
+          if (!currentUser && user?.id) {
+            currentUser = user;
+          }
+          if ((!currentUser || !currentUser.id) && profile?.id) {
+            currentUser = { ...currentUser, id: profile.id };
+          }
+          
+          if (!currentUser || !currentUser.id) {
+            throw new Error('No valid session found. Please log in again.');
+          }
+          
+          // Update profile using authService
+          const result = await authService.updateProfile(currentUser.id, updatedProfile);
+          
+          if (!result.success) {
+            throw new Error(result.error || 'Failed to update profile');
+          }
+          
+          console.log('✅ TabNavigator - Profile updated successfully');
+          
+          // Force refresh the profile data in the main app
+          if (onProfileUpdate) {
+            console.log('🔄 Triggering profile refresh in main app');
+            await onProfileUpdate(currentUser.id);
+          }
+          
+        } catch (error) {
+          console.error('💥 TabNavigator - Error saving profile:', error);
+          throw error;
+        }
       }
     });
   };
@@ -393,6 +580,7 @@ function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefres
             onNavigateToGames={onNavigateToGames}
             onSchedulePressFromHome={onNavigateToSchedules}
             refreshTrigger={refreshTrigger}
+            onSignOut={onSignOut}
           />
         )}
       </Tab.Screen>
@@ -477,12 +665,13 @@ function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefres
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [scheduleRefreshTrigger, setScheduleRefreshTrigger] = useState(0);
   const [gamesRefreshTrigger, setGamesRefreshTrigger] = useState(0);
-  const navigationRef = useRef<any>(null);
+
+  const navigationRef = React.useRef<any>(null);
 
   // Load fonts
   const [fontsLoaded] = useFonts(fonts);
@@ -494,38 +683,71 @@ export default function App() {
     }
   }, [fontsLoaded]);
 
-  // Check authentication state on app start
   useEffect(() => {
-    if (fontsLoaded) {
-      checkAuthState();
-    }
+    checkAuthState();
     
     // Listen for auth state changes
-    const { data: { subscription } } = authService.onAuthStateChange((user, profile) => {
-      setUser(user);
-      setProfile(profile);
-      setIsAuthenticated(!!user && !!profile);
-      setIsLoading(false);
-    });
+    const { data: { subscription } } = authService.onAuthStateChange(
+      (currentUser, currentProfile) => {
+        console.log('🔄 Auth state changed in App:', { 
+          hasUser: !!currentUser, 
+          hasProfile: !!currentProfile 
+        });
+        
+        if (currentUser && currentProfile) {
+          setUser(currentUser);
+          setProfile(currentProfile);
+          setIsAuthenticated(true);
+        } else {
+          setUser(null);
+          setProfile(null);
+          setIsAuthenticated(false);
+        }
+        setIsLoading(false);
+      }
+    );
 
-    return () => subscription.unsubscribe();
-  }, [fontsLoaded]);
+    // Cleanup subscription
+    return () => {
+      if (subscription?.unsubscribe) {
+        subscription.unsubscribe();
+      }
+    };
+  }, []);
 
   const checkAuthState = async () => {
     try {
       const currentUser = await authService.getCurrentUser();
       if (currentUser) {
         console.log('👤 Current user found:', currentUser.id);
-        const userProfile = await authService.getProfile(currentUser.id);
-        
-        if (userProfile) {
-          console.log('✅ Profile loaded successfully');
-          setUser(currentUser);
-          setProfile(userProfile);
-          setIsAuthenticated(true);
-        } else {
-          console.log('⚠️ No profile found for user');
-          setIsAuthenticated(false);
+        // Intentar obtener el perfil sin hacer logs de error
+        try {
+          const userProfile = await authService.getProfile(currentUser.id);
+          
+          if (userProfile) {
+            console.log('✅ Profile loaded successfully');
+            setUser(currentUser);
+            setProfile(userProfile);
+            setIsAuthenticated(true);
+          } else {
+            // Es normal que no haya perfil si el usuario es nuevo
+            console.log('📝 No profile yet - user needs to complete profile setup');
+            setUser(currentUser);
+            setProfile(null);
+            setIsAuthenticated(false); // No está completamente autenticado hasta que tenga perfil
+          }
+        } catch (profileError: any) {
+          // Si es un error 406 (no rows found), es esperado para usuarios nuevos
+          if (profileError.message?.includes('No rows found')) {
+            console.log('📝 New user - needs to create profile');
+            setUser(currentUser);
+            setProfile(null);
+            setIsAuthenticated(false);
+          } else {
+            // Solo loggear errores reales
+            console.error('Error getting profile:', profileError);
+            setIsAuthenticated(false);
+          }
         }
       } else {
         console.log('❌ No current user found');
@@ -536,6 +758,28 @@ export default function App() {
       setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Function to refresh profile data from database
+  const refreshProfile = async (userId: string) => {
+    try {
+      console.log('🔄 Refreshing profile data for user:', userId);
+      
+      // Clear any cached profile data
+      await AsyncStorage.removeItem(`profile_${userId}`);
+      await AsyncStorage.removeItem(`profile_cache_time_${userId}`);
+      
+      // Get fresh profile data
+      const freshProfile = await authService.getProfile(userId);
+      if (freshProfile) {
+        console.log('✅ Profile refreshed successfully');
+        setProfile(freshProfile);
+      } else {
+        console.log('⚠️ No profile found during refresh');
+      }
+    } catch (error) {
+      console.error('💥 Error refreshing profile:', error);
     }
   };
 
@@ -552,19 +796,21 @@ export default function App() {
   };
 
   const handleCreateGameFromSchedules = () => {
-    navigationRef.current?.navigate('CreateGameFlow');
+    navigationRef.current?.navigate('CreateGameFlow', {
+      fromSchedules: true,
+    });
   };
 
   const handleNavigateToSchedules = () => {
-    navigationRef.current?.navigate('TabNavigator', { screen: 'Schedules' });
+    navigationRef.current?.navigate('TabNavigator', { screen: 'Home' });
   };
 
   const handleNavigateToGames = () => {
-    navigationRef.current?.navigate('TabNavigator', { screen: 'Games' });
+    navigationRef.current?.navigate('TabNavigator', { screen: 'Search' });
   };
 
-  // Show loading screen while checking auth state or loading fonts
-  if (!fontsLoaded || isLoading) {
+  // Determine which screen to show
+  if (isLoading || !fontsLoaded) {
     return (
       <SafeAreaProvider>
         <ExpoStatusBar style="dark" />
@@ -577,150 +823,193 @@ export default function App() {
     );
   }
 
-  // Show auth flow if not authenticated
-  if (!isAuthenticated) {
+  // ONLY show main app if user has BOTH account AND complete profile
+  if (user && profile) {
+    console.log('📱 Showing main app - User:', !!user, 'Profile:', !!profile);
+    console.log('✅ User has complete profile, showing main app');
+    
     return (
       <SafeAreaProvider>
         <ExpoStatusBar style="dark" />
-        <AuthFlow onAuthComplete={handleAuthComplete} />
+        <SafeAreaView style={styles.container} edges={['top']}>
+          <NavigationContainer ref={navigationRef} linking={linking}>
+            <MainStack.Navigator
+              screenOptions={{
+                headerShown: false,
+              }}
+            >
+              <MainStack.Screen
+                name="TabNavigator"
+                options={{ headerShown: false }}
+              >
+                {() => (
+                  <TabNavigator
+                    user={user}
+                    profile={profile}
+                    onCreateGame={handleCreateGameFromSchedules}
+                    refreshTrigger={scheduleRefreshTrigger}
+                    gamesRefreshTrigger={gamesRefreshTrigger}
+                    onNavigateToSchedules={handleNavigateToSchedules}
+                    onNavigateToGames={handleNavigateToGames}
+                    onSignOut={handleSignOut}
+                    navigationRef={navigationRef}
+                    onProfileUpdate={refreshProfile}
+                  />
+                )}
+              </MainStack.Screen>
+              <MainStack.Screen
+                name="ScheduleDetails"
+                options={{ headerShown: false }}
+              >
+                {({ route, navigation }: any) => (
+                  <ScheduleDetailsWrapper
+                    route={route}
+                    navigation={navigation}
+                    setScheduleRefreshTrigger={setScheduleRefreshTrigger}
+                  />
+                )}
+              </MainStack.Screen>
+              <MainStack.Screen
+                name="FindDetails"
+                options={{ headerShown: false }}
+              >
+                {({ route, navigation }: any) => (
+                  <FindDetailsWrapper
+                    route={route}
+                    navigation={navigation}
+                    setGamesRefreshTrigger={setGamesRefreshTrigger}
+                    user={user}
+                    profile={profile}
+                  />
+                )}
+              </MainStack.Screen>
+              <MainStack.Screen
+                name="FindReview"
+                options={{ headerShown: false }}
+              >
+                {({ route, navigation }: any) => (
+                  <FindReviewWrapper
+                    route={route}
+                    navigation={navigation}
+                    setGamesRefreshTrigger={setGamesRefreshTrigger}
+                    user={user}
+                    profile={profile}
+                  />
+                )}
+              </MainStack.Screen>
+              <MainStack.Screen
+                name="UpcomingDetails"
+                options={{ headerShown: false }}
+              >
+                {({ route, navigation }: any) => (
+                  <UpcomingDetailsWrapper
+                    route={route}
+                    navigation={navigation}
+                    setGamesRefreshTrigger={setGamesRefreshTrigger}
+                  />
+                )}
+              </MainStack.Screen>
+              <MainStack.Screen
+                name="CreateGameFlow"
+                options={{
+                  headerShown: false,
+                  presentation: 'modal',
+                  animationTypeForReplace: 'push',
+                  animation: 'slide_from_bottom',
+                }}
+              >
+                {({ route, navigation }: any) => (
+                  <CreateGameFlowWrapper
+                    route={route}
+                    navigation={navigation}
+                    setScheduleRefreshTrigger={setScheduleRefreshTrigger}
+                  />
+                )}
+              </MainStack.Screen>
+              <MainStack.Screen
+                name="Profile"
+                options={{ headerShown: false }}
+              >
+                {({ route, navigation }: any) => (
+                  <ProfileScreenWrapper
+                    route={route}
+                    navigation={navigation}
+                  />
+                )}
+              </MainStack.Screen>
+              <MainStack.Screen
+                name="ManageNotifications"
+                options={{ headerShown: false }}
+              >
+                {({ route, navigation }: any) => (
+                  <ManageNotificationsScreenWrapper
+                    route={route}
+                    navigation={navigation}
+                  />
+                )}
+              </MainStack.Screen>
+              <MainStack.Screen
+                name="ManageDoublePartners"
+                options={{ headerShown: false }}
+              >
+                {({ route, navigation }: any) => (
+                  <ManageDoublePartnersScreenWrapper
+                    route={route}
+                    navigation={navigation}
+                  />
+                )}
+              </MainStack.Screen>
+              <MainStack.Screen
+                name="CreatePartner"
+                options={{ headerShown: false }}
+              >
+                {({ route, navigation }: any) => (
+                  <CreatePartnerScreenWrapper
+                    route={route}
+                    navigation={navigation}
+                  />
+                )}
+              </MainStack.Screen>
+              <MainStack.Screen
+                name="Filter"
+                options={{ headerShown: false }}
+              >
+                {({ route, navigation }: any) => (
+                  <FilterScreenWrapper
+                    route={route}
+                    navigation={navigation}
+                  />
+                )}
+              </MainStack.Screen>
+              <MainStack.Screen
+                name="EditPartner"
+                options={{ headerShown: false }}
+              >
+                {({ route, navigation }: any) => (
+                  <EditPartnerScreenWrapper
+                    route={route}
+                    navigation={navigation}
+                  />
+                )}
+              </MainStack.Screen>
+            </MainStack.Navigator>
+          </NavigationContainer>
+        </SafeAreaView>
       </SafeAreaProvider>
     );
   }
 
-  // Show main app if authenticated
+  // If user exists but no profile, OR no user at all, show auth flow
+  if (user && !profile) {
+    console.log('⚠️ User exists but profile incomplete - showing auth flow to complete registration');
+  } else {
+    console.log('🔑 No user found - showing auth flow');
+  }
+  
   return (
     <SafeAreaProvider>
       <ExpoStatusBar style="dark" />
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <NavigationContainer ref={navigationRef}>
-          <MainStack.Navigator
-            screenOptions={{
-              headerShown: false,
-            }}
-          >
-            <MainStack.Screen
-              name="TabNavigator"
-              options={{ headerShown: false }}
-            >
-              {() => (
-                <TabNavigator
-                  user={user}
-                  profile={profile}
-                  onCreateGame={handleCreateGameFromSchedules}
-                  refreshTrigger={scheduleRefreshTrigger}
-                  gamesRefreshTrigger={gamesRefreshTrigger}
-                  onNavigateToSchedules={handleNavigateToSchedules}
-                  onNavigateToGames={handleNavigateToGames}
-                  onSignOut={handleSignOut}
-                  navigationRef={navigationRef}
-                />
-              )}
-            </MainStack.Screen>
-            <MainStack.Screen
-              name="ScheduleDetails"
-              options={{ headerShown: false }}
-            >
-              {({ route, navigation }: any) => (
-                <ScheduleDetailsWrapper
-                  route={route}
-                  navigation={navigation}
-                  setScheduleRefreshTrigger={setScheduleRefreshTrigger}
-                />
-              )}
-            </MainStack.Screen>
-            <MainStack.Screen
-              name="FindDetails"
-              options={{ headerShown: false }}
-            >
-              {({ route, navigation }: any) => (
-                <FindDetailsWrapper
-                  route={route}
-                  navigation={navigation}
-                  setGamesRefreshTrigger={setGamesRefreshTrigger}
-                  user={user}
-                  profile={profile}
-                />
-              )}
-            </MainStack.Screen>
-            <MainStack.Screen
-              name="FindReview"
-              options={{ headerShown: false }}
-            >
-              {({ route, navigation }: any) => (
-                <FindReviewWrapper
-                  route={route}
-                  navigation={navigation}
-                  setGamesRefreshTrigger={setGamesRefreshTrigger}
-                  user={user}
-                  profile={profile}
-                />
-              )}
-            </MainStack.Screen>
-            <MainStack.Screen
-              name="UpcomingDetails"
-              options={{ headerShown: false }}
-            >
-              {({ route, navigation }: any) => (
-                <UpcomingDetailsWrapper
-                  route={route}
-                  navigation={navigation}
-                  setGamesRefreshTrigger={setGamesRefreshTrigger}
-                />
-              )}
-            </MainStack.Screen>
-            <MainStack.Screen
-              name="CreateGameFlow"
-              options={{
-                headerShown: false,
-                presentation: 'modal',
-                animationTypeForReplace: 'push',
-                animation: 'slide_from_bottom',
-              }}
-            >
-              {({ route, navigation }: any) => (
-                <CreateGameFlowWrapper
-                  route={route}
-                  navigation={navigation}
-                  setScheduleRefreshTrigger={setScheduleRefreshTrigger}
-                />
-              )}
-            </MainStack.Screen>
-            <MainStack.Screen
-              name="Profile"
-              options={{ headerShown: false }}
-            >
-              {({ route, navigation }: any) => (
-                <ProfileScreenWrapper
-                  route={route}
-                  navigation={navigation}
-                />
-              )}
-            </MainStack.Screen>
-            <MainStack.Screen
-              name="ManageNotifications"
-              options={{ headerShown: false }}
-            >
-              {({ route, navigation }: any) => (
-                <ManageNotificationsScreenWrapper
-                  route={route}
-                  navigation={navigation}
-                />
-              )}
-            </MainStack.Screen>
-            <MainStack.Screen
-              name="ManageDoublePartners"
-              options={{ headerShown: false }}
-            >
-              {({ route, navigation }: any) => (
-                <ManageDoublePartnersScreenWrapper
-                  route={route}
-                  navigation={navigation}
-                />
-              )}
-            </MainStack.Screen>
-          </MainStack.Navigator>
-        </NavigationContainer>
-      </SafeAreaView>
+      <AuthFlow />
     </SafeAreaProvider>
   );
 }

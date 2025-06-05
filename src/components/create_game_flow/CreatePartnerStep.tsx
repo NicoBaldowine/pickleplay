@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Keyboard, TouchableWithoutFeedback, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Keyboard, TouchableWithoutFeedback, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { ArrowLeft, X, ChevronDown, Check } from 'lucide-react-native';
 import { globalTextStyles } from '../../styles/globalStyles';
 import { COLORS } from '../../constants/colors';
+import { doublePartnersService } from '../../services/doublePartnersService';
+import { authService } from '../../services/authService';
 
 interface CreatePartnerStepProps {
   onClose: () => void;
   onBack: () => void;
-  onCreatePartner: (partnerData: { name: string; lastname: string; level: string }) => void;
+  onCreatePartner: (partnerData: { name: string; lastname: string; level: string; id?: string }) => void;
 }
 
 const ICON_SIZE_ACTION = 24;
@@ -30,8 +32,9 @@ const CreatePartnerStep: React.FC<CreatePartnerStepProps> = ({ onClose, onBack, 
   const [lastname, setLastname] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('');
   const [showLevelDropdown, setShowLevelDropdown] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleCreatePartner = () => {
+  const handleCreatePartner = async () => {
     if (name.trim().length === 0) {
       Alert.alert('Name Required', 'Please enter the partner\'s first name.');
       return;
@@ -45,11 +48,46 @@ const CreatePartnerStep: React.FC<CreatePartnerStepProps> = ({ onClose, onBack, 
       return;
     }
 
-    onCreatePartner({
-      name: name.trim(),
-      lastname: lastname.trim(),
-      level: selectedLevel,
-    });
+    setIsLoading(true);
+
+    try {
+      const partnerData = {
+        name: name.trim(),
+        lastname: lastname.trim(),
+        level: selectedLevel,
+      };
+
+      // Get current user to save partner to database
+      const currentUser = await authService.getCurrentUser();
+      if (!currentUser?.id) {
+        Alert.alert('Error', 'User not found. Please sign in again.');
+        return;
+      }
+
+      // Save partner to database
+      const result = await doublePartnersService.createPartner(currentUser.id, {
+        partner_name: `${partnerData.name} ${partnerData.lastname}`,
+        partner_level: partnerData.level as 'beginner' | 'intermediate' | 'advanced' | 'expert'
+      });
+
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'Failed to create partner');
+        return;
+      }
+
+      console.log('✅ Partner saved to database successfully');
+      
+      // Return partner data with database ID
+      onCreatePartner({
+        ...partnerData,
+        id: result.partnerId
+      });
+    } catch (error) {
+      console.error('Error creating partner:', error);
+      Alert.alert('Error', 'An error occurred while creating the partner.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleLevelSelect = (levelId: string) => {
@@ -63,6 +101,7 @@ const CreatePartnerStep: React.FC<CreatePartnerStepProps> = ({ onClose, onBack, 
   };
 
   const isFormValid = name.trim().length > 0 && lastname.trim().length > 0 && selectedLevel !== '';
+  const isButtonDisabled = !isFormValid || isLoading;
 
   const dismissKeyboard = () => {
     Keyboard.dismiss();
@@ -131,12 +170,12 @@ const CreatePartnerStep: React.FC<CreatePartnerStepProps> = ({ onClose, onBack, 
         {/* Create Partner Button - Fixed at bottom */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity 
-            style={[styles.createButton, !isFormValid && styles.disabledButton]}
+            style={[styles.createButton, isButtonDisabled && styles.disabledButton]}
             onPress={handleCreatePartner}
-            disabled={!isFormValid}
+            disabled={isButtonDisabled}
           >
-            <Text style={[styles.createButtonText, !isFormValid && styles.disabledButtonText]}>
-              Create Partner
+            <Text style={[styles.createButtonText, isButtonDisabled && styles.disabledButtonText]}>
+              {isLoading ? <ActivityIndicator size="small" color="#FFFFFF" /> : 'Create Partner'}
             </Text>
           </TouchableOpacity>
         </View>

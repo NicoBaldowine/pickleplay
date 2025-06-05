@@ -11,10 +11,10 @@ import ListItem from '../components/ui/ListItem';
 import { COLORS } from '../constants/colors';
 
 // Import game service and types
-import { Game, gameService } from '../services/gameService';
+import { GameWithPlayers, gameService } from '../services/gameService';
 
 interface FindReviewProps {
-  game: Game;
+  game: GameWithPlayers;
   user: any;
   profile: any;
   onBack: () => void;
@@ -28,7 +28,7 @@ const FindReview: React.FC<FindReviewProps> = ({ game, user, profile, onBack, on
   const [notesError, setNotesError] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const formattedDateTime = gameService.formatGameDateTime(game.date, game.time);
+  const formattedDateTime = gameService.formatGameDateTime(game.scheduled_date, game.scheduled_time);
 
   // Phone number validation for US territory
   const validatePhoneNumber = (phone: string) => {
@@ -78,19 +78,8 @@ const FindReview: React.FC<FindReviewProps> = ({ game, user, profile, onBack, on
       return;
     }
 
-    Alert.alert(
-      'Game Accepted!',
-      `You've successfully joined the ${game.game_type} game. The game details have been added to your Games tab.`,
-      [
-        {
-          text: 'View My Games',
-          onPress: () => {
-            onAcceptGame(game.id, phoneNumber.trim(), notes.trim() || undefined);
-          },
-        },
-      ],
-      { cancelable: false }
-    );
+    // Call onAcceptGame directly - wrapper handles navigation and success feedback
+    onAcceptGame(game.id, phoneNumber.trim(), notes.trim() || undefined);
   };
 
   const handleNotesFocus = () => {
@@ -100,15 +89,34 @@ const FindReview: React.FC<FindReviewProps> = ({ game, user, profile, onBack, on
     }, 100);
   };
 
-  // User profile picture
+  // User profile picture - use actual user avatar or fallback
   const userAvatarIcon = (
     <View style={styles.userPictureContainer}>
-      <Image
-        source={{ uri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' }}
-        style={styles.userPicture}
-      />
+      {profile?.avatar_url ? (
+        <Image
+          source={{ uri: profile.avatar_url }}
+          style={styles.userPicture}
+        />
+      ) : (
+        <View style={styles.avatarPlaceholder}>
+          <Text style={styles.avatarInitials}>
+            {profile?.first_name?.charAt(0) || 'U'}{profile?.last_name?.charAt(0) || ''}
+          </Text>
+        </View>
+      )}
     </View>
   );
+
+  // Get user's full name
+  const getUserName = () => {
+    if (profile?.full_name) {
+      return profile.full_name;
+    }
+    if (profile?.first_name || profile?.last_name) {
+      return `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim();
+    }
+    return user?.email?.split('@')[0] || 'User';
+  };
 
   // Check if button should be active
   const isButtonActive = phoneNumber.trim().length > 0 && !phoneError && !notesError;
@@ -138,23 +146,23 @@ const FindReview: React.FC<FindReviewProps> = ({ game, user, profile, onBack, on
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* User Info Section */}
+            {/* User Info Section - Current user's info */}
             <ListItem
-              title={profile?.full_name || 'User'}
+              title={getUserName()}
               chips={[profile?.pickleball_level || 'Beginner']}
               chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
               avatarIcon={userAvatarIcon}
               style={styles.listItem}
             />
 
-            {/* Location Section */}
+            {/* Location Section - Game location */}
             <ListItem
-              title={game.location}
+              title={`${game.venue_name} - ${game.venue_address}`}
               avatarIcon={<MapPin size={20} color="#000000" />}
               style={styles.infoListItem}
             />
 
-            {/* Date & Time Section */}
+            {/* Date & Time Section - Game date and time */}
             <ListItem
               title={formattedDateTime}
               avatarIcon={<Clock size={20} color="#000000" />}
@@ -265,6 +273,20 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 20,
+  },
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitials: {
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#000000',
   },
   inputSection: {
     marginBottom: 24,

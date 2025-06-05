@@ -1,16 +1,33 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Keyboard, TouchableWithoutFeedback, ScrollView, StatusBar, SafeAreaView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  TextInput, 
+  Alert, 
+  Modal, 
+  Keyboard, 
+  ScrollView, 
+  StatusBar, 
+  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback
+} from 'react-native';
 import { ArrowLeft, ChevronDown, Check } from 'lucide-react-native';
+import { COLORS } from '../../constants/colors';
 
 interface PersonalInfoScreenProps {
   onBack: () => void;
   onComplete: (personalData: { name: string; lastname: string; level: string }) => void;
   isLoading?: boolean;
+  isCompletingRegistration?: boolean;
 }
 
 const ICON_SIZE_ACTION = 24;
 const ICON_SIZE_DROPDOWN = 18;
-const ICON_COLOR_DARK = '#333';
+const ICON_COLOR_DARK = '#000000';
 const ICON_COLOR_MEDIUM = '#888';
 const ICON_COLOR_BLUE = '#007AFF';
 
@@ -21,21 +38,39 @@ const levelOptions = [
   { id: 'expert', label: 'Expert' },
 ];
 
-const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onComplete, isLoading = false }) => {
+const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onComplete, isLoading = false, isCompletingRegistration = false }) => {
   const [name, setName] = useState('');
   const [lastname, setLastname] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('');
   const [showLevelDropdown, setShowLevelDropdown] = useState(false);
+  
+  const nameInputRef = useRef<TextInput>(null);
+  const lastnameInputRef = useRef<TextInput>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // Simplified keyboard handling
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      console.log('🔥 PersonalInfoScreen mounted, attempting to focus name input');
+      if (nameInputRef.current) {
+        nameInputRef.current.focus();
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleComplete = () => {
-    if (isLoading) return; // Prevent multiple submissions
+    if (isLoading) return;
     
     if (name.trim().length === 0) {
       Alert.alert('Name Required', 'Please enter your first name.');
+      nameInputRef.current?.focus();
       return;
     }
     if (lastname.trim().length === 0) {
       Alert.alert('Last Name Required', 'Please enter your last name.');
+      lastnameInputRef.current?.focus();
       return;
     }
     if (selectedLevel === '') {
@@ -43,6 +78,8 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
       return;
     }
 
+    Keyboard.dismiss();
+    
     onComplete({
       name: name.trim(),
       lastname: lastname.trim(),
@@ -60,39 +97,68 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
     return level ? level.label : 'Select your level';
   };
 
-  const isFormValid = name.trim().length > 0 && lastname.trim().length > 0 && selectedLevel !== '';
+  const handleNameSubmit = () => {
+    if (lastnameInputRef.current) {
+      lastnameInputRef.current.focus();
+    }
+  };
 
-  const dismissKeyboard = () => {
+  const handleLastnameSubmit = () => {
     Keyboard.dismiss();
   };
 
+  const isFormValid = name.trim().length > 0 && lastname.trim().length > 0 && selectedLevel !== '';
+
   return (
-    <TouchableWithoutFeedback onPress={dismissKeyboard}>
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" />
-        
-        <View style={styles.topBarActions}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
+      <View style={styles.topBarActions}>
+        {!isCompletingRegistration && (
           <TouchableOpacity onPress={onBack} style={styles.headerButtonLeft}>
             <ArrowLeft size={ICON_SIZE_ACTION} color={ICON_COLOR_DARK} />
           </TouchableOpacity>
-        </View>
+        )}
+      </View>
 
-        <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <Text style={styles.mainTitle}>Personal Information</Text>
-          <Text style={styles.descriptionText}>
-            Tell us about yourself to complete your profile.
+      <KeyboardAvoidingView 
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView 
+          ref={scrollViewRef}
+          style={styles.scrollContent} 
+          contentContainerStyle={styles.scrollContentContainer}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.mainTitle}>
+            {isCompletingRegistration ? 'Complete Your Profile' : 'Personal Information'}
           </Text>
+          
+          {isCompletingRegistration && (
+            <Text style={styles.descriptionText}>
+              Please complete your profile to start using the app
+            </Text>
+          )}
 
           {/* Name Input */}
           <View style={styles.inputSection}>
             <Text style={styles.inputLabel}>First Name</Text>
             <TextInput
-              style={styles.textInput}
+              ref={nameInputRef}
+              style={styles.inputField}
               placeholder="Enter your first name"
+              placeholderTextColor="#999"
               value={name}
               onChangeText={setName}
               autoCapitalize="words"
               returnKeyType="next"
+              editable={!isLoading}
+              onSubmitEditing={handleNameSubmit}
+              onFocus={() => {
+                console.log('🎯 Name input focused successfully');
+              }}
             />
           </View>
 
@@ -100,12 +166,19 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
           <View style={styles.inputSection}>
             <Text style={styles.inputLabel}>Last Name</Text>
             <TextInput
-              style={styles.textInput}
+              ref={lastnameInputRef}
+              style={styles.inputField}
               placeholder="Enter your last name"
+              placeholderTextColor="#999"
               value={lastname}
               onChangeText={setLastname}
               autoCapitalize="words"
-              returnKeyType="next"
+              returnKeyType="done"
+              editable={!isLoading}
+              onSubmitEditing={handleLastnameSubmit}
+              onFocus={() => {
+                console.log('🎯 Last name input focused successfully');
+              }}
             />
           </View>
 
@@ -114,7 +187,11 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
             <Text style={styles.inputLabel}>Pickleball Level</Text>
             <TouchableOpacity 
               style={styles.dropdownButton}
-              onPress={() => setShowLevelDropdown(true)}
+              onPress={() => {
+                Keyboard.dismiss();
+                setShowLevelDropdown(true);
+              }}
+              disabled={isLoading}
             >
               <Text style={[styles.dropdownText, selectedLevel === '' && styles.placeholderText]}>
                 {getSelectedLevelLabel()}
@@ -124,57 +201,63 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
           </View>
         </ScrollView>
 
-        {/* Complete Profile Button - Fixed at bottom */}
+        {/* Complete Profile Button */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity 
-            style={[styles.completeButton, (!isFormValid || isLoading) && styles.disabledButton]}
+            style={[
+              styles.completeButton, 
+              (!isFormValid || isLoading) && styles.completeButtonDisabled
+            ]}
             onPress={handleComplete}
             disabled={!isFormValid || isLoading}
           >
-            <Text style={[styles.completeButtonText, (!isFormValid || isLoading) && styles.disabledButtonText]}>
+            <Text style={[
+              styles.completeButtonText,
+              (!isFormValid || isLoading) && styles.completeButtonTextDisabled
+            ]}>
               {isLoading ? 'Creating Account...' : 'Complete Profile'}
             </Text>
           </TouchableOpacity>
         </View>
+      </KeyboardAvoidingView>
 
-        {/* Level Selection Modal */}
-        <Modal
-          visible={showLevelDropdown}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowLevelDropdown(false)}
+      {/* Level Selection Modal */}
+      <Modal
+        visible={showLevelDropdown}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowLevelDropdown(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowLevelDropdown(false)}
         >
-          <TouchableOpacity 
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowLevelDropdown(false)}
-          >
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Select Skill Level</Text>
-              {levelOptions.map((option) => (
-                <TouchableOpacity
-                  key={option.id}
-                  style={styles.modalOption}
-                  onPress={() => handleLevelSelect(option.id)}
-                >
-                  <Text style={styles.modalOptionText}>{option.label}</Text>
-                  {selectedLevel === option.id && (
-                    <Check size={20} color={ICON_COLOR_BLUE} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </TouchableOpacity>
-        </Modal>
-      </SafeAreaView>
-    </TouchableWithoutFeedback>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Skill Level</Text>
+            {levelOptions.map((option) => (
+              <TouchableOpacity
+                key={option.id}
+                style={styles.modalOption}
+                onPress={() => handleLevelSelect(option.id)}
+              >
+                <Text style={styles.modalOptionText}>{option.label}</Text>
+                {selectedLevel === option.id && (
+                  <Check size={20} color={ICON_COLOR_BLUE} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
   topBarActions: {
     flexDirection: 'row',
@@ -187,16 +270,23 @@ const styles = StyleSheet.create({
   headerButtonLeft: {
     padding: 8,
   },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
   scrollContent: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingBottom: 120, // Increased space for the larger fixed button container
+  },
+  scrollContentContainer: {
+    paddingBottom: 20,
+    flexGrow: 1,
   },
   mainTitle: {
-    fontSize: 34,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: 24,
   },
   descriptionText: {
     fontSize: 16,
@@ -205,68 +295,66 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   inputSection: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   inputLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#000000',
     marginBottom: 8,
   },
-  textInput: {
-    backgroundColor: '#F5F0E8',
-    borderRadius: 12,
+  inputField: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#333',
-    borderWidth: 1,
-    borderColor: '#E5E5E7',
+    color: '#000000',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    width: '100%',
   },
   dropdownButton: {
-    backgroundColor: '#F5F0E8',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5E7',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   dropdownText: {
     fontSize: 16,
-    color: '#333',
+    color: '#000000',
   },
   placeholderText: {
     color: '#999',
   },
   buttonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'white',
-    paddingHorizontal: 20,
-    paddingVertical: 30,
-    paddingBottom: 40,
+    padding: 16,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
   },
   completeButton: {
-    backgroundColor: ICON_COLOR_BLUE,
-    borderRadius: 12,
+    backgroundColor: '#000000',
+    borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  disabledButton: {
-    backgroundColor: '#E5E5E7',
+  completeButtonDisabled: {
+    opacity: 0.5,
   },
   completeButtonText: {
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
     color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
   },
-  disabledButtonText: {
-    color: '#999',
+  completeButtonTextDisabled: {
+    opacity: 0.7,
   },
   modalOverlay: {
     flex: 1,
@@ -283,7 +371,8 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
     color: '#333',
     marginBottom: 16,
     textAlign: 'center',

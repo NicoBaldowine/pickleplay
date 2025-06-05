@@ -94,11 +94,72 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
   const renderGameItem = (game: UserGame, index: number) => {
     const dateTime = gameService.formatGameDateTime(game.date, game.time);
     
-    // Create chips array with level, date, and location
+    // Get opponent information for upcoming games
+    const getOpponentInfo = () => {
+      if (game.status !== 'upcoming') {
+        return {
+          title: game.venue_name,
+          imageUrl: game.game_type === 'singles' 
+            ? singlePlayerImages[index % singlePlayerImages.length]
+            : doublePlayerImages[index % doublePlayerImages.length]
+        };
+      }
+
+      // For upcoming games, show opponent information
+      // Since these are games the user joined, the creator is the opponent
+      if (game.creator) {
+        const creatorName = game.creator.full_name || 
+                           `${game.creator.first_name || ''} ${game.creator.last_name || ''}`.trim() || 
+                           'Unknown Player';
+        
+        // For doubles games, show both players like in other screens
+        if (game.game_type === 'doubles') {
+          // Check if partner info is in notes
+          if (game.original_game?.notes && game.original_game.notes.includes('with partner:')) {
+            const partnerMatch = game.original_game.notes.match(/with partner: (.+?)(?:\.|$)/);
+            if (partnerMatch && partnerMatch[1]) {
+              // Extract first names only for cleaner display
+              const creatorFirstName = game.creator.first_name || creatorName.split(' ')[0] || 'User';
+              const partnerFullName = partnerMatch[1].trim();
+              const partnerFirstName = partnerFullName.split(' ')[0] || 'Partner';
+              
+              return {
+                title: `${creatorFirstName} & ${partnerFirstName}`,
+                imageUrl: game.creator.avatar_url || doublePlayerImages[index % doublePlayerImages.length]
+              };
+            }
+          }
+          
+          // Fallback for doubles without partner info
+          return {
+            title: `${creatorName} (need partner)`,
+            imageUrl: game.creator.avatar_url || doublePlayerImages[index % doublePlayerImages.length]
+          };
+        }
+        
+        // For singles games, show creator name
+        return {
+          title: creatorName,
+          imageUrl: game.creator.avatar_url || singlePlayerImages[index % singlePlayerImages.length]
+        };
+      }
+
+      // Fallback for games without creator info
+      return {
+        title: game.venue_name,
+        imageUrl: game.game_type === 'singles' 
+          ? singlePlayerImages[index % singlePlayerImages.length]
+          : doublePlayerImages[index % doublePlayerImages.length]
+      };
+    };
+
+    const opponentInfo = getOpponentInfo();
+    
+    // Create chips array with level, date, and venue name (simplified)
     const chips = [
-      game.opponent_level || 'Beginner', // Level
+      game.skill_level || 'Beginner', // Level
       dateTime, // Date and time
-      game.location || 'TBD', // Location
+      game.original_game?.venue_name || game.venue_name || 'TBD', // Venue name only
     ];
     
     // Define chip background colors based on game status
@@ -112,16 +173,11 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
       'rgba(0, 0, 0, 0.07)', // Default gray for past games
     ];
 
-    // Select appropriate image based on game type and index
-    const imageUrl = game.game_type === 'singles' 
-      ? singlePlayerImages[index % singlePlayerImages.length]
-      : doublePlayerImages[index % doublePlayerImages.length];
-
-    // Create avatar with profile picture placeholder
+    // Create avatar with opponent's photo or placeholder
     const avatarIcon = (
       <View style={styles.avatarContainer}>
         <Image
-          source={{ uri: imageUrl }}
+          source={{ uri: opponentInfo.imageUrl }}
           style={styles.avatarImage}
         />
       </View>
@@ -130,10 +186,6 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
     // Right element based on status
     const rightElement = game.status === 'upcoming' ? (
       <ChevronRight size={ICON_SIZE_CHEVRON} color={ICON_COLOR_CHEVRON} />
-    ) : game.result ? (
-      <Text style={[styles.resultText, { color: game.result === 'won' ? '#34C759' : '#FF3B30' }]}>
-        {game.result === 'won' ? 'Won' : 'Lost'}
-      </Text>
     ) : (
       <Text style={[styles.resultText, { color: '#666' }]}>Completed</Text>
     );
@@ -149,7 +201,7 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
     return (
       <ListItem
         key={game.id}
-        title={game.opponent_name}
+        title={opponentInfo.title}
         chips={chips}
         chipBackgrounds={chipBackgrounds}
         avatarIcon={avatarIcon}

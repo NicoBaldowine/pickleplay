@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, StatusBar, TouchableOpacity, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, StatusBar, TouchableOpacity, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronRight, User, Users, Calendar, Search } from 'lucide-react-native';
+import { ChevronRight, User, Users, Calendar, Search, LogOut } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Import your custom components
 import ListItem from '../components/ui/ListItem';
@@ -25,11 +26,12 @@ interface HomeScreenProps {
   onNavigateToGames?: () => void;
   onSchedulePressFromHome?: (scheduleId: string) => void;
   refreshTrigger?: number;
+  onSignOut?: () => void;
 }
 
 const ICON_SIZE_AVATAR = 20;
 
-const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSchedules, onNavigateToGames, onSchedulePressFromHome, refreshTrigger }) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSchedules, onNavigateToGames, onSchedulePressFromHome, refreshTrigger, onSignOut }) => {
   const [upcomingGames, setUpcomingGames] = useState<UserGame[]>([]);
   const [userSchedules, setUserSchedules] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,11 +120,62 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
   const renderUpcomingGame = (game: UserGame, index: number) => {
     const dateTime = gameService.formatGameDateTime(game.date, game.time);
     
-    // Create chips array with level, date, and location (same as GamesScreen)
+    // Get opponent information for upcoming games (same logic as GamesScreen)
+    const getOpponentInfo = () => {
+      // Since these are games the user joined, the creator is the opponent
+      if (game.creator) {
+        const creatorName = game.creator.full_name || 
+                           `${game.creator.first_name || ''} ${game.creator.last_name || ''}`.trim() || 
+                           'Unknown Player';
+        
+        // For doubles games, show both players like in GamesScreen
+        if (game.game_type === 'doubles') {
+          // Check if partner info is in notes
+          if (game.original_game?.notes && game.original_game.notes.includes('with partner:')) {
+            const partnerMatch = game.original_game.notes.match(/with partner: (.+?)(?:\.|$)/);
+            if (partnerMatch && partnerMatch[1]) {
+              // Extract first names only for cleaner display
+              const creatorFirstName = game.creator.first_name || creatorName.split(' ')[0] || 'User';
+              const partnerFullName = partnerMatch[1].trim();
+              const partnerFirstName = partnerFullName.split(' ')[0] || 'Partner';
+              
+              return {
+                name: `${creatorFirstName} & ${partnerFirstName}`,
+                imageUrl: game.creator.avatar_url || doublePlayerImages[index % doublePlayerImages.length]
+              };
+            }
+          }
+          
+          // Fallback for doubles without partner info
+          return {
+            name: `${creatorName} (need partner)`,
+            imageUrl: game.creator.avatar_url || doublePlayerImages[index % doublePlayerImages.length]
+          };
+        }
+        
+        // For singles games, show creator name
+        return {
+          name: creatorName,
+          imageUrl: game.creator.avatar_url || singlePlayerImages[index % singlePlayerImages.length]
+        };
+      }
+
+      // Fallback if no creator info
+      return {
+        name: 'Opponent',
+        imageUrl: game.game_type === 'singles' 
+          ? singlePlayerImages[index % singlePlayerImages.length]
+          : doublePlayerImages[index % doublePlayerImages.length]
+      };
+    };
+
+    const opponentInfo = getOpponentInfo();
+    
+    // Create chips array with level, date, and venue name (same as GamesScreen)
     const chips = [
-      game.opponent_level || 'Beginner', // Level
+      game.skill_level || 'Beginner', // Level
       dateTime, // Date and time
-      game.location || 'TBD', // Location
+      game.original_game?.venue_name || game.venue_name || 'TBD', // Venue name only
     ];
     
     // Define chip background colors based on game status (upcoming games use colored backgrounds)
@@ -132,16 +185,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
       'rgba(255, 255, 255, 0.3)', // White with 30% opacity for upcoming games
     ];
 
-    // Select appropriate image based on game type and index (same as GamesScreen)
-    const imageUrl = game.game_type === 'singles' 
-      ? singlePlayerImages[index % singlePlayerImages.length]
-      : doublePlayerImages[index % doublePlayerImages.length];
-
-    // Create avatar with profile picture placeholder
+    // Create avatar with opponent's real photo
     const avatarIcon = (
       <View style={styles.avatarContainer}>
         <Image
-          source={{ uri: imageUrl }}
+          source={{ uri: opponentInfo.imageUrl }}
           style={styles.avatarImage}
         />
       </View>
@@ -156,7 +204,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
     return (
       <ListItem
         key={game.id}
-        title={game.opponent_name}
+        title={opponentInfo.name} // Show opponent name instead of venue
         chips={chips}
         chipBackgrounds={chipBackgrounds}
         avatarIcon={avatarIcon}
@@ -168,16 +216,20 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
   };
 
   const renderSchedule = (schedule: Game, index: number) => {
-    const dateTime = gameService.formatGameDateTime(schedule.date, schedule.time);
+    const dateTime = gameService.formatGameDateTime(schedule.scheduled_date, schedule.scheduled_time);
     
     // Create chips array similar to SchedulesScreen
-    const gameTypeCapitalized = schedule.game_type.charAt(0).toUpperCase() + schedule.game_type.slice(1);
-    const skillLevelCapitalized = schedule.skill_level.charAt(0).toUpperCase() + schedule.skill_level.slice(1);
+    const gameTypeCapitalized = schedule.game_type 
+      ? schedule.game_type.charAt(0).toUpperCase() + schedule.game_type.slice(1)
+      : 'Unknown';
+    const skillLevelCapitalized = schedule.skill_level 
+      ? schedule.skill_level.charAt(0).toUpperCase() + schedule.skill_level.slice(1)
+      : 'Any Level';
     
     const chips = [
       gameTypeCapitalized, // Game type
       skillLevelCapitalized, // Level
-      schedule.location, // Location
+      `${schedule.venue_name} - ${schedule.city}` || 'TBD', // Location
     ];
     
     // Define chip background colors based on game type (same as SchedulesScreen)
@@ -220,8 +272,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
   
   // Sort schedules by date and get the 2 closest to current date
   const sortedSchedules = userSchedules.sort((a, b) => {
-    const dateTimeA = new Date(`${a.date}T${a.time}`);
-    const dateTimeB = new Date(`${b.date}T${b.time}`);
+    const dateTimeA = new Date(`${a.scheduled_date}T${a.scheduled_time}`);
+    const dateTimeB = new Date(`${b.scheduled_date}T${b.scheduled_time}`);
     return dateTimeA.getTime() - dateTimeB.getTime();
   });
   const displaySchedules = sortedSchedules.slice(0, 2);
@@ -230,27 +282,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
     <SafeAreaView style={styles.safeArea} edges={[]}> 
       <StatusBar barStyle="dark-content" />
       <View style={styles.headerContainer}>
-        <Text style={styles.title}>{`Welcome, ${profile?.first_name || 'User'}`}</Text>
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>{`Welcome, ${profile?.first_name || 'User'}`}</Text>
+        </View>
       </View>
       <ScrollView style={styles.scrollViewContainer} contentContainerStyle={styles.scrollViewContent}>
         
-        {/* Upcoming Games Section */}
-        {renderSectionHeader('Upcoming Games', handleSeeAllUpcoming)}
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading games...</Text>
-          </View>
-        ) : displayUpcomingGames.length > 0 ? (
-          displayUpcomingGames.map((game, index) => renderUpcomingGame(game, index))
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No upcoming games</Text>
-            <Text style={styles.emptySubtext}>Go to Find to discover games!</Text>
-          </View>
+        {/* Upcoming Games Section - Only show if there are upcoming games */}
+        {!loading && displayUpcomingGames.length > 0 && (
+          <>
+            {renderSectionHeader('Upcoming Games', handleSeeAllUpcoming)}
+            {displayUpcomingGames.map((game, index) => renderUpcomingGame(game, index))}
+            <View style={styles.sectionSpacing} />
+          </>
         )}
 
         {/* Schedules Section */}
-        <View style={styles.sectionSpacing} />
         {renderSectionHeader('Your Schedules', handleSeeAllSchedules)}
         {displaySchedules.length > 0 ? (
           displaySchedules.map((schedule, index) => renderSchedule(schedule, index))
@@ -276,11 +323,17 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 12,
   },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   title: {
     fontSize: 28,
     fontFamily: 'InterTight-ExtraBold',
     fontWeight: '800',
     color: COLORS.TEXT_PRIMARY,
+    flex: 1,
   },
   scrollViewContainer: {
     flex: 1,

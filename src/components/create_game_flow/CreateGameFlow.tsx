@@ -16,14 +16,20 @@ import { COLORS } from '../../constants/colors';
 
 // Define types for the create game flow
 export type GameType = 'singles' | 'doubles';
-export type PlayerLevel = 'beginner' | 'intermediate' | 'advanced' | 'pro';
-export interface Court { id: string; name: string; distance?: string;}
+export type PlayerLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
+export interface Court { 
+  id: string; 
+  name: string; 
+  distance?: string;
+  address?: string;
+}
 export interface CreateGameData {
     game_type: GameType;
     court_id: string;
     player_level: PlayerLevel;
     scheduled_time: string;
     partner_name?: string;
+    partner_id?: string;
     notes?: string;
     status?: string;
 }
@@ -45,6 +51,7 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
     player_level: undefined,
     scheduled_time: undefined,
     partner_name: undefined,
+    partner_id: undefined,
     notes: undefined,
   });
 
@@ -52,55 +59,88 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
     // Provide some courts for SelectCourtStep to render
     // In a real app, this would fetch from a courts API
     setCourts([
-        { id: 'court_central_park', name: 'Central Park Courts', distance: '0.5 miles' },
-        { id: 'court_riverside', name: 'Riverside Recreation Center', distance: '1.2 miles' },
-        { id: 'court_downtown', name: 'Downtown Sports Complex', distance: '2.1 miles' },
-        { id: 'court_community', name: 'Community Center Courts', distance: '1.8 miles' },
-        { id: 'court_elite', name: 'Elite Pickleball Club', distance: '3.2 miles' },
+        { id: 'court_city_park', name: 'City Park Tennis Center', distance: '0.8 miles', address: '2800 E 26th Ave, Denver, CO' },
+        { id: 'court_washington_park', name: 'Washington Park Recreation Center', distance: '1.4 miles', address: '701 S Franklin St, Denver, CO' },
+        { id: 'court_congress_park', name: 'Congress Park Courts', distance: '2.2 miles', address: '1100 Josephine St, Denver, CO' },
+        { id: 'court_stapleton', name: 'Stapleton Community Courts', distance: '3.1 miles', address: '2823 Roslyn St, Denver, CO' },
+        { id: 'court_highlands', name: 'Highlands Recreation Center', distance: '2.8 miles', address: '2880 Lowell Blvd, Denver, CO' },
     ]);
   }, []);
 
-  const handleNextStep = () => setStep(prev => prev + 1);
-  const handlePrevStep = () => setStep(prev => prev - 1);
+  const handleNextStep = () => {
+    console.log('🔄 Moving to next step from:', step);
+    setStep(prev => prev + 1);
+  };
+  const handlePrevStep = () => {
+    console.log('🔄 Moving to previous step from:', step);
+    setStep(prev => prev - 1);
+  };
 
   const updateGameData = (data: Partial<CreateGameData>) => {
+    console.log('📝 Updating game data:', data);
     setGameData(prev => ({ ...prev, ...data }));
   };
 
   const handleTypeSelect = (type: GameType) => {
+    console.log('🎮 Selected game type:', type);
     updateGameData({ game_type: type });
     handleNextStep();
   };
 
   const handleCreateNewPartner = () => {
+    console.log('👥 Creating new partner');
     setIsCreatingNewPartner(true);
     handleNextStep();
   };
 
-  const handlePartnerCreated = (partnerData: { name: string; lastname: string; level: string }) => {
+  const handlePartnerCreated = (partnerData: { name: string; lastname: string; level: string; id?: string }) => {
     const fullName = `${partnerData.name} ${partnerData.lastname}`;
-    updateGameData({ partner_name: fullName });
+    console.log('✅ Partner created:', fullName, 'ID:', partnerData.id);
+    updateGameData({ 
+      partner_name: fullName,
+      partner_id: partnerData.id // Store newly created partner ID
+      // Don't set player_level here - let OpponentLevelStep handle it
+    });
     setIsCreatingNewPartner(false);
     handleNextStep();
   };
 
-  const handlePartnerSelect = (partnerName: string) => {
-    updateGameData({ partner_name: partnerName });
+  const handlePartnerSelect = (partner: { name: string; level: string; id?: string }) => {
+    console.log('👥 Partner selected:', partner.name, 'ID:', partner.id);
+    updateGameData({ 
+      partner_name: partner.name,
+      partner_id: partner.id // Store partner ID for database operations
+      // Don't set player_level here - let OpponentLevelStep handle it
+    });
     setIsCreatingNewPartner(false);
     handleNextStep();
   };
 
   const handleLevelSelect = (level: PlayerLevel) => {
+    console.log('🎯 Level selected:', level);
     updateGameData({ player_level: level });
+    // Reset the creating partner flag when level is selected
+    setIsCreatingNewPartner(false);
     handleNextStep();
   };
 
   const handleCourtSelect = (courtId: string) => {
+    console.log('🏟️ Court selected:', courtId);
     updateGameData({ court_id: courtId });
     handleNextStep();
   };
 
   const handleScheduleSelect = (dateTimeIso: string) => {
+    console.log('📅 Schedule selected:', dateTimeIso);
+    console.log('📅 Current gameData:', gameData);
+    
+    // Ensure player_level is set before proceeding to review
+    if (!gameData.player_level) {
+      console.error('❌ No player_level set when trying to schedule!');
+      Alert.alert('Missing Information', 'Please select a skill level for the game.');
+      return;
+    }
+    
     updateGameData({ scheduled_time: dateTimeIso });
     handleNextStep(); // Go to ReviewStep instead of creating game immediately
   };
@@ -109,6 +149,17 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
     setIsLoading(true);
 
     try {
+      // Debug logging
+      console.log('🎯 Creating game with data:', gameData);
+      console.log('🎯 Player level:', gameData.player_level);
+
+      // Validate that player_level is set
+      if (!gameData.player_level) {
+        Alert.alert('Missing Information', 'Please select a skill level for the game.');
+        setIsLoading(false);
+        return;
+      }
+
       // Get current user and profile 
       const currentUser = await authService.getCurrentUser();
       const currentProfile = await authService.getProfile(currentUser?.id || '');
@@ -126,50 +177,66 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
 
       // Get court name for location
       const selectedCourt = courts.find(court => court.id === gameData.court_id);
-      const location = selectedCourt?.name || 'Unknown Court';
 
-      // Create the game data in the format expected by gameService
-      const gameToCreate = {
+      // Create the game
+      const result = await gameService.createGame({
         creator_id: currentUser.id,
-        creator_name: `${currentProfile.first_name} ${currentProfile.last_name}`,
-        creator_level: currentProfile.pickleball_level || 'Intermediate',
-        partner_name: gameData.partner_name,
-        partner_level: gameData.partner_name ? gameData.player_level : undefined,
-        date: gameDate,
-        time: gameTime,
-        location: location,
         game_type: gameData.game_type!,
         skill_level: gameData.player_level!,
-        notes: notes || `Looking for ${gameData.game_type} players at ${gameData.player_level} level`,
-        phone_number: phoneNumber, // Add phone number to game data
-      };
-
-      // Validate required fields
-      if (!gameToCreate.game_type || !gameToCreate.date || !gameToCreate.time || !gameToCreate.location) {
-        Alert.alert('Incomplete Information', 'Please ensure all previous steps are completed.');
-        setIsLoading(false);
-        return;
-      }
-
-      // For doubles, ensure partner name is provided
-      if (gameToCreate.game_type === 'doubles' && !gameToCreate.partner_name) {
-        Alert.alert('Partner Required', 'Please provide your partner\'s name for doubles games.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Create the game using gameService
-      const result = await gameService.createGame(gameToCreate);
+        venue_name: selectedCourt?.name || 'Unknown Court',
+        venue_address: selectedCourt?.address || 'Address TBD',
+        city: 'Denver', // Extract city from address in real app
+        scheduled_date: gameDate,
+        scheduled_time: gameTime,
+        notes: gameData.game_type === 'doubles' && gameData.partner_name 
+          ? `${notes || ''} with partner: ${gameData.partner_name}.`.trim()
+          : notes || undefined
+      });
       
       if (result.success && result.gameId) {
+        // If it's a doubles game and we have a partner, add them to the game
+        if (gameData.game_type === 'doubles' && gameData.partner_name) {
+          // TODO: In a real app, we'd need to find the partner's user ID
+          // For now, we'll just note it in the game notes
+          console.log('Partner specified:', gameData.partner_name);
+        }
+        
         Alert.alert('Game Created!', `Your ${gameData.game_type} game has been scheduled successfully.`);
         onGameCreated(result.gameId);
       } else {
-        Alert.alert('Creation Failed', result.error || 'Could not create game. Please try again.');
+        // Check if the error is about session expiration
+        if (result.error?.includes('Session expired') || result.error?.includes('JWT expired')) {
+          Alert.alert(
+            'Session Expired',
+            'Your session has expired. Please log in again to continue.',
+            [
+              { text: 'OK', onPress: () => {
+                // You might want to navigate to login screen here
+                onClose();
+              }}
+            ]
+          );
+        } else {
+          Alert.alert('Creation Failed', result.error || 'Could not create game. Please try again.');
+        }
       }
     } catch (error: any) {
       console.error('Error creating game in flow:', error);
-      Alert.alert('Creation Failed', error.message || 'Could not create game. Please try again.');
+      
+      // Check for JWT expired in catch block too
+      if (error.message?.includes('JWT expired') || error.message?.includes('Session expired')) {
+        Alert.alert(
+          'Session Expired',
+          'Your session has expired. Please log in again to continue.',
+          [
+            { text: 'OK', onPress: () => {
+              onClose();
+            }}
+          ]
+        );
+      } else {
+        Alert.alert('Creation Failed', error.message || 'Could not create game. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -180,8 +247,11 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
   }
 
   const renderStep = () => {
+    console.log(`🚀 Rendering step ${step} - gameType: ${gameData.game_type}, isCreatingNewPartner: ${isCreatingNewPartner}, player_level: ${gameData.player_level}`);
+    
     switch (step) {
       case 1:
+        // Type selection (Singles or Doubles)
         return (
           <TypeOfGameStep
             onClose={onClose}
@@ -189,7 +259,7 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
           />
         );
       case 2:
-        // If doubles was selected, show DoublesStep, otherwise show OpponentLevelStep
+        // Doubles: Partner selection, Singles: Level selection
         if (gameData.game_type === 'doubles') {
           return (
             <DoublesStep
@@ -209,7 +279,7 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
           );
         }
       case 3:
-        // If doubles and creating new partner, show CreatePartnerStep
+        // Doubles: Create partner if needed, Singles: Court selection
         if (gameData.game_type === 'doubles' && isCreatingNewPartner) {
           return (
             <CreatePartnerStep
@@ -218,9 +288,8 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
               onCreatePartner={handlePartnerCreated}
             />
           );
-        }
-        // If doubles was selected (and not creating partner), this is OpponentLevelStep, otherwise SelectCourtStep
-        else if (gameData.game_type === 'doubles') {
+        } else if (gameData.game_type === 'doubles') {
+          // Already have partner, now select level
           return (
             <OpponentLevelStep
               onClose={onClose}
@@ -229,6 +298,7 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
             />
           );
         } else {
+          // Singles: Court selection
           return (
             <SelectCourtStep
               courts={courts}
@@ -240,18 +310,31 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
           );
         }
       case 4:
-        // If doubles was selected, this is SelectCourtStep, otherwise ScheduleStep
+        // Doubles: Level or Court selection, Singles: Schedule
         if (gameData.game_type === 'doubles') {
-          return (
-            <SelectCourtStep
-              courts={courts}
-              isLoading={isFetchingCourts} 
-              onClose={onClose}
-              onBack={handlePrevStep}
-              onSelectCourt={handleCourtSelect}
-            />
-          );
+          if (!gameData.player_level) {
+            // Need to select level (from CreatePartnerStep)
+            return (
+              <OpponentLevelStep
+                onClose={onClose}
+                onBack={handlePrevStep}
+                onSelectLevel={handleLevelSelect} 
+              />
+            );
+          } else {
+            // Have level, now select court
+            return (
+              <SelectCourtStep
+                courts={courts}
+                isLoading={isFetchingCourts} 
+                onClose={onClose}
+                onBack={handlePrevStep}
+                onSelectCourt={handleCourtSelect}
+              />
+            );
+          }
         } else {
+          // Singles: Schedule
           return (
             <ScheduleStep
               onClose={onClose}
@@ -262,17 +345,32 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
           );
         }
       case 5:
-        // If doubles, this is ScheduleStep, otherwise ReviewStep
+        // Doubles: Court or Schedule, Singles: Review
         if (gameData.game_type === 'doubles') {
-          return (
-            <ScheduleStep
-              onClose={onClose}
-              onBack={handlePrevStep}
-              onSchedule={handleScheduleSelect} 
-              isSubmitting={false} 
-            />
-          );
+          if (!gameData.court_id) {
+            // Need to select court
+            return (
+              <SelectCourtStep
+                courts={courts}
+                isLoading={isFetchingCourts} 
+                onClose={onClose}
+                onBack={handlePrevStep}
+                onSelectCourt={handleCourtSelect}
+              />
+            );
+          } else {
+            // Have court, now schedule
+            return (
+              <ScheduleStep
+                onClose={onClose}
+                onBack={handlePrevStep}
+                onSchedule={handleScheduleSelect} 
+                isSubmitting={false} 
+              />
+            );
+          }
         } else {
+          // Singles: Review
           return (
             <ReviewStep
               onClose={onClose}
@@ -285,17 +383,48 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
           );
         }
       case 6:
-        // This is only for doubles - ReviewStep
-        return (
-          <ReviewStep
-            onClose={onClose}
-            onBack={handlePrevStep}
-            onScheduleGame={handleScheduleGame}
-            isSubmitting={isLoading}
-            gameData={gameData}
-            courts={courts}
-          />
-        );
+        // Doubles: Schedule or Review
+        if (gameData.game_type === 'doubles') {
+          if (!gameData.scheduled_time) {
+            // Need to schedule
+            return (
+              <ScheduleStep
+                onClose={onClose}
+                onBack={handlePrevStep}
+                onSchedule={handleScheduleSelect} 
+                isSubmitting={false} 
+              />
+            );
+          } else {
+            // Have everything, review
+            return (
+              <ReviewStep
+                onClose={onClose}
+                onBack={handlePrevStep}
+                onScheduleGame={handleScheduleGame}
+                isSubmitting={isLoading}
+                gameData={gameData}
+                courts={courts}
+              />
+            );
+          }
+        }
+        return null;
+      case 7:
+        // Doubles: Final Review
+        if (gameData.game_type === 'doubles') {
+          return (
+            <ReviewStep
+              onClose={onClose}
+              onBack={handlePrevStep}
+              onScheduleGame={handleScheduleGame}
+              isSubmitting={isLoading}
+              gameData={gameData}
+              courts={courts}
+            />
+          );
+        }
+        return null;
       default:
         return null;
     }

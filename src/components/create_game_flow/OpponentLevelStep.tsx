@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { ArrowLeft, X, ChevronRight, Rabbit, Cat, Dog, Crown } from 'lucide-react-native';
 import ListItem from '../ui/ListItem';
-import { PlayerLevel } from '../../services/gameService'; // Import PlayerLevel type
+import { PlayerLevel } from './CreateGameFlow'; // Import PlayerLevel type from local file
 import { globalTextStyles } from '../../styles/globalStyles';
 import { COLORS } from '../../constants/colors';
 
@@ -36,9 +36,9 @@ const levelData: { id: PlayerLevel; title: string; description: string; range: s
     icon: <Dog size={20} color="#000000" />
   },
   { 
-    id: 'pro', 
-    title: 'Pro', 
-    description: 'Professional level play',
+    id: 'expert', 
+    title: 'Expert', 
+    description: 'Tournament player',
     range: '5.0+',
     icon: <Crown size={20} color="#000000" />
   },

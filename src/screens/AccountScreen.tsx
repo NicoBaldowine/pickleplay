@@ -102,7 +102,7 @@ const AccountScreen: React.FC<AccountScreenProps> = ({ user, profile, onSignOut,
 
   // Create chips for user profile info
   const userChips = [
-    user.email, // First line, first chip (email alone)
+    user?.email || profile?.email || 'Email not available', // First line, first chip (email with fallback)
     '', // First line, second chip (empty to keep email alone)
     getSkillLevelDisplay(profile.pickleball_level), // Second line, first chip
     `${gamesPlayed} Games`, // Second line, second chip
@@ -119,10 +119,18 @@ const AccountScreen: React.FC<AccountScreenProps> = ({ user, profile, onSignOut,
   // Profile picture for user
   const userAvatarIcon = (
     <View style={styles.profilePictureContainer}>
-      <Image
-        source={{ uri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80' }}
-        style={styles.profilePicture}
-      />
+      {profile.avatar_url ? (
+        <Image
+          source={{ uri: profile.avatar_url }}
+          style={styles.profilePicture}
+        />
+      ) : (
+        <View style={styles.profilePicturePlaceholder}>
+          <Text style={styles.profilePictureInitials}>
+            {profile.first_name.charAt(0)}{profile.last_name.charAt(0)}
+          </Text>
+        </View>
+      )}
     </View>
   );
 
@@ -239,6 +247,19 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 20,
+  },
+  profilePicturePlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.07)',
+  },
+  profilePictureInitials: {
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
   },
   preferencesSection: {
     marginBottom: 12,

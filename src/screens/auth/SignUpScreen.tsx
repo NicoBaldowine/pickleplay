@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -10,30 +10,105 @@ import {
   ScrollView,
   TouchableWithoutFeedback,
   Keyboard,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native';
+import { authService } from '../../services/authService';
 
 interface SignUpScreenProps {
   onBack: () => void;
   onSignUp: (email: string, password: string) => void;
   onGoogleSignUp: () => void;
+  onLoginPress?: () => void;
+  onEmailVerificationRequired: (email: string, password: string) => void;
 }
 
-const SignUpScreen: React.FC<SignUpScreenProps> = ({ 
+const SignUpScreen: React.FC<SignUpScreenProps> = memo(({ 
   onBack, 
   onSignUp, 
-  onGoogleSignUp 
+  onGoogleSignUp,
+  onLoginPress,
+  onEmailVerificationRequired
 }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const handleSignUp = () => {
-    if (email.trim() && password.trim()) {
-      onSignUp(email.trim(), password.trim());
+  const handleSignUp = useCallback(async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Missing Information', 'Please enter both email and password.');
+      return;
     }
-  };
 
-  const isFormValid = email.trim().length > 0 && password.trim().length > 0;
+    if (password.length < 6) {
+      Alert.alert('Weak Password', 'Password must be at least 6 characters long.');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      console.log('🚀 Attempting to create account:', email);
+      
+      // First check if email already exists
+      const emailExists = await authService.checkEmailExists(email.trim());
+      
+      if (emailExists) {
+        console.log('❌ Email already exists:', email);
+        Alert.alert(
+          'Email Already Registered',
+          'An account with this email already exists. Would you like to log in instead?',
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel'
+            },
+            {
+              text: 'Go to Login',
+              onPress: () => {
+                console.log('🔄 Redirecting to login');
+                if (onLoginPress) {
+                  onLoginPress();
+                }
+              }
+            }
+          ]
+        );
+        setIsLoading(false);
+        return;
+      }
+      
+      // Email doesn't exist, proceed with signup
+      const response = await authService.signUp(email.trim(), password.trim(), {
+        email: email.trim(),
+        name: '',
+        lastname: '',
+        level: ''
+      });
+      
+      if (response.success) {
+        // Account created, proceed to verification
+        console.log('✅ Account created, proceeding to email verification');
+        onEmailVerificationRequired(email.trim(), password.trim());
+      } else {
+        // Handle error
+        Alert.alert('Sign Up Failed', response.error || 'Failed to create account');
+      }
+      
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      Alert.alert('Error', 'Failed to create account. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [email, password, onEmailVerificationRequired, onLoginPress]);
+
+  const togglePasswordVisibility = useCallback(() => {
+    setShowPassword(prev => !prev);
+  }, []);
+
+  const isFormValid = email.trim().length > 0 && password.trim().length >= 6;
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -76,16 +151,29 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({
 
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Password</Text>
-              <TextInput
-                style={styles.textInput}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Create a password"
-                placeholderTextColor="#999"
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
+              <View style={styles.passwordInputContainer}>
+                <TextInput
+                  style={[styles.textInput, styles.passwordInput]}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Create a password"
+                  placeholderTextColor="#999"
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity 
+                  style={styles.eyeButton} 
+                  onPress={togglePasswordVisibility}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  {showPassword ? (
+                    <EyeOff size={20} color="#666" />
+                  ) : (
+                    <Eye size={20} color="#666" />
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
@@ -105,19 +193,31 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({
         {/* Bottom Button */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity 
-            style={[styles.signUpButton, !isFormValid && styles.disabledButton]} 
+            style={[
+              styles.signUpButton, 
+              (!isFormValid || isLoading) && styles.disabledButton
+            ]} 
             onPress={handleSignUp}
-            disabled={!isFormValid}
+            disabled={!isFormValid || isLoading}
           >
-            <Text style={[styles.signUpButtonText, !isFormValid && styles.disabledButtonText]}>
-              Sign Up
-            </Text>
+            {isLoading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={[
+                styles.signUpButtonText, 
+                (!isFormValid || isLoading) && styles.disabledButtonText
+              ]}>
+                Sign Up
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     </TouchableWithoutFeedback>
   );
-};
+});
+
+SignUpScreen.displayName = 'SignUpScreen';
 
 const styles = StyleSheet.create({
   container: {
@@ -175,6 +275,18 @@ const styles = StyleSheet.create({
     color: '#333',
     borderWidth: 1,
     borderColor: '#E5E5E7',
+  },
+  passwordInputContainer: {
+    position: 'relative',
+  },
+  passwordInput: {
+    paddingRight: 50, // Make room for the eye icon
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 16,
+    top: '50%',
+    transform: [{ translateY: -10 }], // Half of icon size
   },
   dividerSection: {
     flexDirection: 'row',
