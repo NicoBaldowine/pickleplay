@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { authService } from '../../services/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { COLORS } from '../../constants/colors';
+import { globalTextStyles } from '../../styles/globalStyles';
 
 interface WelcomeScreenProps {
   onSignUp: () => void;
@@ -74,23 +76,25 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSignUp, onLogin }) => {
           </View>
         )}
 
-        {/* Logo/Title Area */}
-        <View style={styles.headerSection}>
-          <Text style={styles.appTitle}>PicklePlay</Text>
-          <Text style={styles.tagline}>🏓</Text>
-        </View>
+        {/* Main Content */}
+        <View style={styles.mainContent}>
+          {/* Title Section */}
+          <View style={styles.titleSection}>
+            <Text style={styles.mainTitle}>Find players nearby.</Text>
+            <Text style={styles.mainTitle}>Set a match.</Text>
+            <Text style={styles.mainTitle}>Let's play.</Text>
+          </View>
 
-        {/* Welcome Message */}
-        <View style={styles.messageSection}>
-          <Text style={styles.welcomeText}>Find players near you.</Text>
-          <Text style={styles.welcomeText}>Set up a game.</Text>
-          <Text style={styles.welcomeText}>Play.</Text>
+          {/* Subtitle */}
+          <View style={styles.subtitleSection}>
+            <Text style={styles.subtitle}>The easiest way to connect with others and enjoy sports near you.</Text>
+          </View>
         </View>
 
         {/* Buttons */}
         <View style={styles.buttonSection}>
-          <TouchableOpacity style={styles.signUpButton} onPress={onSignUp}>
-            <Text style={styles.signUpButtonText}>Sign Up</Text>
+          <TouchableOpacity style={styles.createAccountButton} onPress={onSignUp}>
+            <Text style={styles.createAccountButtonText}>Create an account</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.loginButton} onPress={onLogin}>
@@ -105,17 +109,17 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSignUp, onLogin }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
+    paddingHorizontal: 16,
+    justifyContent: 'space-between',
   },
   clearSessionContainer: {
     position: 'absolute',
-    top: 60,
-    right: 20,
+    top: 20,
+    right: 16,
     zIndex: 1,
   },
   clearSessionButton: {
@@ -129,56 +133,64 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  headerSection: {
-    alignItems: 'center',
-    marginBottom: 60,
+  mainContent: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingTop: 60,
+    paddingBottom: 100,
   },
-  appTitle: {
-    fontSize: 42,
-    fontWeight: 'bold',
-    color: '#333',
+  titleSection: {
+    marginBottom: 32,
+  },
+  mainTitle: {
+    fontSize: 40,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    lineHeight: 48,
     marginBottom: 8,
   },
-  tagline: {
-    fontSize: 32,
+  subtitleSection: {
+    paddingHorizontal: 8,
   },
-  messageSection: {
-    alignItems: 'center',
-    marginBottom: 80,
-  },
-  welcomeText: {
-    fontSize: 24,
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 8,
-    fontWeight: '500',
+  subtitle: {
+    fontSize: 18,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_SECONDARY,
+    lineHeight: 24,
+    textAlign: 'left',
   },
   buttonSection: {
-    gap: 16,
+    paddingBottom: 48,
+    gap: 12,
+    paddingHorizontal: 0,
   },
-  signUpButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
+  createAccountButton: {
+    backgroundColor: COLORS.TEXT_PRIMARY,
+    borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
+    marginHorizontal: 0,
   },
-  signUpButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+  createAccountButtonText: {
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   loginButton: {
-    backgroundColor: 'transparent',
-    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#007AFF',
+    marginHorizontal: 0,
   },
   loginButtonText: {
-    color: '#007AFF',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
   },
 });
 

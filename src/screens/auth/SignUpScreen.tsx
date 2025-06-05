@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native';
 import { authService } from '../../services/authService';
+import { COLORS } from '../../constants/colors';
+import TopBar from '../../components/ui/TopBar';
 
 interface SignUpScreenProps {
   onBack: () => void;
@@ -116,11 +118,12 @@ const SignUpScreen: React.FC<SignUpScreenProps> = memo(({
         <StatusBar barStyle="dark-content" />
         
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <ArrowLeft size={24} color="#333" />
-          </TouchableOpacity>
-        </View>
+        <TopBar
+          title=""
+          leftIcon={<ArrowLeft size={24} color={COLORS.TEXT_PRIMARY} />}
+          onLeftIconPress={onBack}
+          style={styles.topBar}
+        />
 
         <ScrollView 
           style={styles.scrollContent} 
@@ -129,8 +132,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = memo(({
         >
           {/* Title Section */}
           <View style={styles.titleSection}>
-            <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Join the PicklePlay community</Text>
+            <Text style={styles.title}>Create an account</Text>
           </View>
 
           {/* Form Section */}
@@ -141,8 +143,8 @@ const SignUpScreen: React.FC<SignUpScreenProps> = memo(({
                 style={styles.textInput}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="Enter your email"
-                placeholderTextColor="#999"
+                placeholder=""
+                placeholderTextColor={COLORS.TEXT_SECONDARY}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -156,8 +158,8 @@ const SignUpScreen: React.FC<SignUpScreenProps> = memo(({
                   style={[styles.textInput, styles.passwordInput]}
                   value={password}
                   onChangeText={setPassword}
-                  placeholder="Create a password"
-                  placeholderTextColor="#999"
+                  placeholder=""
+                  placeholderTextColor={COLORS.TEXT_SECONDARY}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -168,33 +170,26 @@ const SignUpScreen: React.FC<SignUpScreenProps> = memo(({
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   {showPassword ? (
-                    <EyeOff size={20} color="#666" />
+                    <EyeOff size={20} color={COLORS.TEXT_SECONDARY} />
                   ) : (
-                    <Eye size={20} color="#666" />
+                    <Eye size={20} color={COLORS.TEXT_SECONDARY} />
                   )}
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
 
-          {/* Divider */}
-          <View style={styles.dividerSection}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
+            {/* Forgot Password */}
+            <TouchableOpacity style={styles.forgotPasswordContainer}>
+              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+            </TouchableOpacity>
           </View>
-
-          {/* Google Button */}
-          <TouchableOpacity style={styles.googleButton} onPress={onGoogleSignUp}>
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
-          </TouchableOpacity>
         </ScrollView>
 
         {/* Bottom Button */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity 
             style={[
-              styles.signUpButton, 
+              styles.continueButton, 
               (!isFormValid || isLoading) && styles.disabledButton
             ]} 
             onPress={handleSignUp}
@@ -204,10 +199,10 @@ const SignUpScreen: React.FC<SignUpScreenProps> = memo(({
               <ActivityIndicator color="white" />
             ) : (
               <Text style={[
-                styles.signUpButtonText, 
+                styles.continueButtonText, 
                 (!isFormValid || isLoading) && styles.disabledButtonText
               ]}>
-                Sign Up
+                Continue
               </Text>
             )}
           </TouchableOpacity>
@@ -222,59 +217,51 @@ SignUpScreen.displayName = 'SignUpScreen';
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 10,
-  },
-  backButton: {
-    padding: 8,
-    alignSelf: 'flex-start',
+  topBar: {
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     flex: 1,
   },
   scrollContentContainer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    paddingTop: 20,
     paddingBottom: 120, // Space for fixed button
   },
   titleSection: {
-    marginBottom: 40,
+    marginBottom: 32,
   },
   title: {
-    fontSize: 34,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    lineHeight: 22,
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
   },
   formSection: {
-    marginBottom: 30,
+    gap: 24,
   },
   inputContainer: {
-    marginBottom: 20,
+    gap: 8,
   },
   inputLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
   },
   textInput: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
     color: '#333',
-    borderWidth: 1,
-    borderColor: '#E5E5E7',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
   },
   passwordInputContainer: {
     position: 'relative',
@@ -288,60 +275,43 @@ const styles = StyleSheet.create({
     top: '50%',
     transform: [{ translateY: -10 }], // Half of icon size
   },
-  dividerSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 30,
+  forgotPasswordContainer: {
+    alignItems: 'flex-end',
+    marginTop: -8,
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E5E5E7',
-  },
-  dividerText: {
-    marginHorizontal: 16,
+  forgotPasswordText: {
     fontSize: 14,
-    color: '#666',
-  },
-  googleButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E5E7',
-  },
-  googleButtonText: {
-    color: '#333',
-    fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_SECONDARY,
   },
   buttonContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FEF2D6',
-    paddingHorizontal: 20,
-    paddingVertical: 30,
-    paddingBottom: 40,
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingBottom: 48,
   },
-  signUpButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
+  continueButton: {
+    backgroundColor: COLORS.TEXT_PRIMARY,
+    borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
   },
   disabledButton: {
-    backgroundColor: '#E5E5E7',
+    opacity: 0.5,
   },
-  signUpButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+  continueButtonText: {
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   disabledButtonText: {
-    color: '#999',
+    opacity: 0.7,
   },
 });
 

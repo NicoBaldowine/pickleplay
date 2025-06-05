@@ -169,7 +169,7 @@ function CreateGameFlowWrapper({ route, navigation, setScheduleRefreshTrigger }:
   };
 
   const handleGameCreated = (gameId: string) => {
-    console.log('Game created with ID:', gameId);
+    console.log('Game scheduled with ID:', gameId);
     
     // Trigger schedule refresh
     setScheduleRefreshTrigger((prev: number) => prev + 1);

@@ -65,6 +65,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
     try {
       setLoading(true);
       const currentUser = await authService.getCurrentUser();
+      
       if (currentUser) {
         // Load user's accepted games
         const games = await gameService.getUserGames(currentUser.id);

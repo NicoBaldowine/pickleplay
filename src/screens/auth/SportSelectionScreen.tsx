@@ -12,7 +12,9 @@ import { ArrowLeft, Zap, Target, Users, Calendar, Trophy } from 'lucide-react-na
 
 // Import colors and components
 import { COLORS } from '../../constants/colors';
+import { globalTextStyles } from '../../styles/globalStyles';
 import ListItem from '../../components/ui/ListItem';
+import TopBar from '../../components/ui/TopBar';
 
 interface SportSelectionScreenProps {
   onBack: () => void;
@@ -53,7 +55,7 @@ const SPORTS = [
 ];
 
 const SportSelectionScreen: React.FC<SportSelectionScreenProps> = ({ onBack, onSportSelected }) => {
-  const [selectedSport, setSelectedSport] = useState<string>('pickleball');
+  const [selectedSport, setSelectedSport] = useState<string>('');
 
   const handleSportSelect = (sportId: string, available: boolean) => {
     if (available) {
@@ -68,21 +70,23 @@ const SportSelectionScreen: React.FC<SportSelectionScreenProps> = ({ onBack, onS
       <StatusBar barStyle="dark-content" />
       
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <ArrowLeft size={24} color={COLORS.TEXT_PRIMARY} />
-        </TouchableOpacity>
-      </View>
+      <TopBar
+        title=""
+        leftIcon={<ArrowLeft size={24} color={COLORS.TEXT_PRIMARY} />}
+        onLeftIconPress={onBack}
+        style={styles.topBar}
+      />
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {/* Title */}
         <Text style={styles.title}>Select your sport</Text>
-        
+
         {/* Sports List */}
         <View style={styles.sportsList}>
           {SPORTS.map((sport) => {
             const IconComponent = sport.icon;
             const isAvailable = sport.available;
+            const isSelected = selectedSport === sport.id;
             
             return (
               <ListItem
@@ -95,7 +99,11 @@ const SportSelectionScreen: React.FC<SportSelectionScreenProps> = ({ onBack, onS
                   />
                 }
                 onPress={isAvailable ? () => handleSportSelect(sport.id, sport.available) : undefined}
-                style={!isAvailable ? styles.listItemDisabled : styles.listItem}
+                style={StyleSheet.flatten([
+                  styles.listItem,
+                  !isAvailable && styles.listItemDisabled,
+                  isSelected && styles.listItemSelected
+                ])}
               />
             );
           })}
@@ -110,21 +118,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
-  },
-  backButton: {
-    padding: 8,
-    alignSelf: 'flex-start',
+  topBar: {
+    backgroundColor: 'transparent',
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingHorizontal: 16,
+    paddingTop: 20,
   },
   title: {
     fontSize: 28,
@@ -134,16 +136,23 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sportsList: {
-    gap: 12,
+    gap: 8,
   },
   listItem: {
-    backgroundColor: '#F5E9CF',
     marginBottom: 8,
+    height: 60,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   listItemDisabled: {
-    backgroundColor: '#F5E9CF',
     opacity: 0.5,
-    marginBottom: 8,
+  },
+  listItemSelected: {
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderWidth: 1,
+    borderColor: COLORS.TEXT_PRIMARY,
   },
 });
 

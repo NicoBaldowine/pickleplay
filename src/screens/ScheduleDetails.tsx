@@ -61,7 +61,7 @@ const ScheduleDetails: React.FC<ScheduleDetailsProps> = ({ schedule, onBack, onD
   const handleCancelSchedule = () => {
     Alert.alert(
       'Cancel Schedule',
-      'Are you sure you want to cancel this schedule? This action cannot be undone.',
+      'Are you sure you want to cancel this schedule? Participants will be notified of the cancellation.',
       [
         {
           text: 'Keep Schedule',

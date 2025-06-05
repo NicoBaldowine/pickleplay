@@ -201,7 +201,7 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
           console.log('Partner specified:', gameData.partner_name);
         }
         
-        Alert.alert('Game Created!', `Your ${gameData.game_type} game has been scheduled successfully.`);
+        Alert.alert('Game Scheduled!', `Your ${gameData.game_type} game has been scheduled successfully.`);
         onGameCreated(result.gameId);
       } else {
         // Check if the error is about session expiration

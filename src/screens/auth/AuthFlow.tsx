@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { View, Alert, Keyboard } from 'react-native';
+import { Alert } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Linking from 'expo-linking';
-import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import WelcomeScreen from './WelcomeScreen';
 import CitySelectionScreen from './CitySelectionScreen';
 import SportSelectionScreen from './SportSelectionScreen';
@@ -15,35 +16,32 @@ import ResetPasswordScreen from './ResetPasswordScreen';
 import { UserData } from '../../lib/supabase';
 import { authService } from '../../services/authService';
 
-export default function AuthFlow() {
-  const [currentScreen, setCurrentScreen] = useState<
-    'welcome' | 'city' | 'sport' | 'signup' | 'login' | 'verification' | 'personal' | 'avatar' | 'forgot' | 'reset'
-  >('welcome');
+const AuthStack = createNativeStackNavigator();
 
+export default function AuthFlow() {
   const [userData, setUserData] = useState<Partial<UserData & { password: string }>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [verifiedUserId, setVerifiedUserId] = useState<string | null>(null);
+  const [initialRouteName, setInitialRouteName] = useState('Welcome');
 
   // Handle deep linking for password reset
   useEffect(() => {
     const handleDeepLink = async (event: Linking.EventType) => {
       console.log('🔗 AuthFlow deep link received:', event.url);
-      console.log('🔍 Full URL details:', JSON.stringify(event, null, 2));
       
       try {
         // Parse URL parameters for detailed analysis
         const url = new URL(event.url);
         const urlParams = new URLSearchParams(url.search || url.hash?.substring(1) || '');
-        console.log('🔍 URL params:', Object.fromEntries(urlParams.entries()));
         
         // Check if this is a reset password link
         if (event.url.includes('reset-password') || event.url.includes('type=recovery')) {
           console.log('🔑 Detected reset password link, navigating to reset screen');
-          setCurrentScreen('reset');
+          setInitialRouteName('Reset');
           return;
         }
         
-        // Check if this is an email confirmation link - be more comprehensive
+        // Check if this is an email confirmation link
         if (event.url.includes('type=email_confirmation') || 
             event.url.includes('confirmation=true') ||
             event.url.includes('access_token') ||
@@ -51,7 +49,6 @@ export default function AuthFlow() {
             urlParams.get('type') === 'email_confirmation' ||
             urlParams.get('type') === 'signup') {
           console.log('📧 Detected email confirmation link');
-          console.log('🔍 Confirmation parameters found');
           
           // Wait a moment for the auth state to update
           setTimeout(async () => {
@@ -61,7 +58,7 @@ export default function AuthFlow() {
               if (user) {
                 console.log('✅ User confirmed, continuing to profile setup');
                 setVerifiedUserId(user.id);
-                setCurrentScreen('personal');
+                setInitialRouteName('Personal');
               } else {
                 console.log('⚠️ No user found after confirmation, trying to refresh session...');
                 
@@ -74,18 +71,18 @@ export default function AuthFlow() {
                   if (retryUser) {
                     console.log('✅ User found on retry, continuing to profile setup');
                     setVerifiedUserId(retryUser.id);
-                    setCurrentScreen('personal');
+                    setInitialRouteName('Personal');
                   } else {
                     console.log('❌ Still no user found, asking to sign in');
                     Alert.alert('Verification Complete', 'Please sign in to continue setting up your profile');
-                    setCurrentScreen('login');
+                    setInitialRouteName('Login');
                   }
                 }, 2000);
               }
             } catch (error) {
               console.error('Error after email confirmation:', error);
               Alert.alert('Verification Complete', 'Please sign in to continue');
-              setCurrentScreen('login');
+              setInitialRouteName('Login');
             }
           }, 1500);
           return;
@@ -94,7 +91,6 @@ export default function AuthFlow() {
         console.log('ℹ️ Link not handled by AuthFlow, ignoring');
       } catch (error) {
         console.error('💥 Error handling deep link:', error);
-        // Don't crash, just log and continue
       }
     };
 
@@ -105,23 +101,13 @@ export default function AuthFlow() {
         if (initialUrl) {
           console.log('🚀 AuthFlow opened with URL:', initialUrl);
           
-          // Parse initial URL too
-          try {
-            const url = new URL(initialUrl);
-            const urlParams = new URLSearchParams(url.search || url.hash?.substring(1) || '');
-            console.log('🔍 Initial URL params:', Object.fromEntries(urlParams.entries()));
-          } catch (parseError) {
-            console.log('Could not parse initial URL params');
-          }
-          
           if (initialUrl.includes('reset-password') || initialUrl.includes('type=recovery')) {
             console.log('🔑 Initial URL is reset password, navigating to reset screen');
-            setCurrentScreen('reset');
+            setInitialRouteName('Reset');
           }
         }
       } catch (error) {
         console.error('Error checking initial URL:', error);
-        // Don't crash, just continue with normal flow
       }
     };
 
@@ -138,7 +124,6 @@ export default function AuthFlow() {
   const handleCreateProfile = useCallback(async () => {
     try {
       console.log('🚀 Creating profile for verified user:', verifiedUserId);
-      console.log('🔍 Current userData state:', userData);
       
       if (!verifiedUserId) {
         console.error('❌ No verified user ID');
@@ -148,20 +133,9 @@ export default function AuthFlow() {
 
       if (!userData.name || !userData.lastname || !userData.level) {
         console.error('❌ Missing user data:', userData);
-        console.error('❌ Missing fields - name:', !userData.name, 'lastname:', !userData.lastname, 'level:', !userData.level);
         Alert.alert('Error', 'Please complete all required information');
         return;
       }
-      
-      console.log('📋 Creating profile with data:', {
-        userId: verifiedUserId,
-        name: userData.name,
-        lastname: userData.lastname,
-        level: userData.level,
-        city: userData.city,
-        avatarUri: userData.avatarUri,
-        email: userData.email
-      });
       
       // Create profile for the verified user
       const response = await authService.createProfile(verifiedUserId, userData as UserData);
@@ -169,21 +143,16 @@ export default function AuthFlow() {
       if (response.success) {
         console.log('✅ Profile created successfully!');
         
-        // Force multiple auth state refreshes to ensure the profile is detected
-        console.log('🔄 Forcing auth state refresh...');
+        // Force auth state refresh
         await authService.forceAuthStateRefresh();
         
-        // Wait a bit and try again to ensure the profile is cached and detected
+        // Additional refreshes with delays
         setTimeout(async () => {
-          console.log('🔄 Second auth state refresh...');
           await authService.forceAuthStateRefresh();
         }, 1000);
         
-        // Give a longer delay to ensure everything is processed
         setTimeout(async () => {
-          console.log('🔄 Final auth state refresh...');
           await authService.forceAuthStateRefresh();
-          console.log('✅ Auth state refresh completed - app should navigate to home now');
         }, 2000);
         
       } else {
@@ -196,245 +165,228 @@ export default function AuthFlow() {
     }
   }, [verifiedUserId, userData]);
 
-  const handleNext = useCallback((screen: typeof currentScreen, data?: Partial<UserData & { password: string }>) => {
-    console.log('🔄 Navigating to screen:', screen);
-    
-    // Dismiss keyboard when navigating to avoid keyboard issues
-    Keyboard.dismiss();
-    
-    if (data) {
-      setUserData(prev => ({ ...prev, ...data }));
-      console.log('💾 Updated userData:', data);
-    }
-    setCurrentScreen(screen);
+  const updateUserData = useCallback((data: Partial<UserData & { password: string }>) => {
+    setUserData(prev => ({ ...prev, ...data }));
   }, []);
 
-  const handleBack = useCallback((screen: typeof currentScreen) => {
-    console.log('🔙 Going back to screen:', screen);
-    
-    // Dismiss keyboard when navigating back
-    Keyboard.dismiss();
-    
-    setCurrentScreen(screen);
-  }, []);
+  return (
+    <NavigationContainer>
+      <AuthStack.Navigator
+        initialRouteName={initialRouteName}
+        screenOptions={{
+          headerShown: false,
+          animation: 'slide_from_right', // Same as main app
+        }}
+      >
+        <AuthStack.Screen name="Welcome">
+          {({ navigation }) => (
+            <WelcomeScreen
+              onSignUp={() => navigation.navigate('City')}
+              onLogin={() => navigation.navigate('Login')}
+            />
+          )}
+        </AuthStack.Screen>
 
-  const signUpProps = useMemo(() => ({
-    onSignUp: (email: string, password: string) => 
-      handleNext('personal', { email, password }),
-    onGoogleSignUp: () => {
-      console.log('Google signup');
-    },
-    onLoginPress: () => {
-      console.log('🔄 SignUpScreen onLoginPress called, navigating to login');
-      handleNext('login');
-    },
-    onEmailVerificationRequired: (email: string, password: string) => {
-      console.log('📧 Email verification required for:', email);
-      // Store email and password for later account creation
-      setUserData(prev => ({ ...prev, email, password }));
-      handleNext('verification');
-    },
-    onBack: () => handleNext('sport')
-  }), [handleNext]);
+        <AuthStack.Screen name="City">
+          {({ navigation }) => (
+            <CitySelectionScreen
+              onCitySelected={(city: string) => {
+                updateUserData({ city });
+                navigation.navigate('Sport');
+              }}
+              onBack={() => navigation.goBack()}
+            />
+          )}
+        </AuthStack.Screen>
 
-  const renderScreen = () => {
-    switch (currentScreen) {
-      case 'welcome':
-        return (
-          <WelcomeScreen
-            onSignUp={() => handleNext('city')}
-            onLogin={() => handleNext('login')}
-          />
-        );
+        <AuthStack.Screen name="Sport">
+          {({ navigation }) => (
+            <SportSelectionScreen
+              onSportSelected={() => navigation.navigate('SignUp')}
+              onBack={() => navigation.goBack()}
+            />
+          )}
+        </AuthStack.Screen>
 
-      case 'city':
-        return (
-          <CitySelectionScreen
-            onCitySelected={(city: string) => handleNext('sport', { city })}
-            onBack={() => handleNext('welcome')}
-          />
-        );
+        <AuthStack.Screen name="SignUp">
+          {({ navigation }) => (
+            <SignUpScreen
+              onSignUp={(email: string, password: string) => {
+                updateUserData({ email, password });
+                navigation.navigate('Personal');
+              }}
+              onGoogleSignUp={() => {
+                console.log('Google signup');
+              }}
+              onLoginPress={() => navigation.navigate('Login')}
+              onEmailVerificationRequired={(email: string, password: string) => {
+                updateUserData({ email, password });
+                navigation.navigate('Verification');
+              }}
+              onBack={() => navigation.goBack()}
+            />
+          )}
+        </AuthStack.Screen>
 
-      case 'sport':
-        return (
-          <SportSelectionScreen
-            onSportSelected={() => handleNext('signup')}
-            onBack={() => handleNext('city')}
-          />
-        );
-
-      case 'signup':
-        return (
-          <SignUpScreen
-            {...signUpProps}
-          />
-        );
-
-      case 'login':
-        return (
-          <LoginScreen
-            onLogin={async (email: string, password: string) => {
-              console.log('Login attempt with:', email);
-              setIsLoading(true);
-              try {
-                const response = await authService.signIn(email, password);
-                
-                if (response.success) {
-                  console.log('✅ Login successful!');
-                  // Login successful - the App component should handle navigation
-                  // through the onAuthStateChange listener
-                } else {
+        <AuthStack.Screen name="Login">
+          {({ navigation }) => (
+            <LoginScreen
+              onLogin={async (email: string, password: string) => {
+                console.log('Login attempt with:', email);
+                setIsLoading(true);
+                try {
+                  const response = await authService.signIn(email, password);
+                  
+                  if (response.success) {
+                    console.log('✅ Login successful!');
+                  } else {
+                    setIsLoading(false);
+                    Alert.alert(
+                      'Login Failed', 
+                      response.error || 'Invalid email or password'
+                    );
+                  }
+                } catch (error: any) {
                   setIsLoading(false);
+                  console.error('Login error:', error);
                   Alert.alert(
-                    'Login Failed', 
-                    response.error || 'Invalid email or password'
+                    'Error', 
+                    error.message || 'An unexpected error occurred'
                   );
                 }
-              } catch (error: any) {
-                setIsLoading(false);
-                console.error('Login error:', error);
+              }}
+              onForgotPassword={(email: string) => {
+                updateUserData({ email });
+                navigation.navigate('Forgot');
+              }}
+              onBack={() => navigation.goBack()}
+              isLoading={isLoading}
+            />
+          )}
+        </AuthStack.Screen>
+
+        <AuthStack.Screen name="Forgot">
+          {({ navigation }) => (
+            <ForgotPasswordScreen
+              onBack={() => navigation.goBack()}
+              onEmailSent={(email: string) => {
                 Alert.alert(
-                  'Error', 
-                  error.message || 'An unexpected error occurred'
-                );
-              }
-            }}
-            onForgotPassword={(email: string) => {
-              console.log('🔑 Navigating to forgot password with email:', email);
-              setUserData(prev => ({ ...prev, email }));
-              handleNext('forgot');
-            }}
-            onBack={() => handleNext('welcome')}
-            isLoading={isLoading}
-          />
-        );
-
-      case 'forgot':
-        return (
-          <ForgotPasswordScreen
-            onBack={() => handleNext('login')}
-            onEmailSent={(email: string) => {
-              console.log('📧 Reset email sent to:', email);
-              Alert.alert(
-                'Check Your Email',
-                'We sent you a password reset link. Click the link in the email to reset your password.',
-                [
-                  {
-                    text: 'OK',
-                    onPress: () => handleNext('login')
-                  }
-                ]
-              );
-            }}
-          />
-        );
-
-      case 'reset':
-        return (
-          <ResetPasswordScreen
-            onBack={() => handleNext('login')}
-            onPasswordReset={() => {
-              console.log('✅ Password reset successful');
-              handleNext('login');
-            }}
-          />
-        );
-
-      case 'personal':
-        return (
-          <PersonalInfoScreen
-            onComplete={(personalData: { name: string; lastname: string; level: string }) => 
-              handleNext('avatar', personalData)
-            }
-            onBack={() => handleNext('signup')}
-            isCompletingRegistration={!!verifiedUserId}
-          />
-        );
-
-      case 'avatar':
-        return (
-          <AvatarScreen
-            onAvatarComplete={async (avatarUri: string) => {
-              console.log('🖼️ Avatar selected, starting profile creation...');
-              setUserData(prev => ({ ...prev, avatarUri }));
-              // After avatar, create profile for the verified user
-              await handleCreateProfile();
-            }}
-            userData={{
-              name: userData.name || 'User',
-              lastname: userData.lastname || '',
-              level: userData.level || 'Beginner'
-            }}
-            onBack={() => handleNext('personal')}
-          />
-        );
-
-      case 'verification':
-        return (
-          <EmailVerificationScreen
-            email={userData.email || ''}
-            password={userData.password}
-            onVerificationComplete={async () => {
-              console.log('📧 Email verification complete!');
-              
-              // Try to get the user from the current session
-              try {
-                const user = await authService.getCurrentUser();
-                if (user) {
-                  console.log('✅ User session found:', user.id);
-                  setVerifiedUserId(user.id);
-                  handleNext('personal');
-                } else {
-                  // If no user found, it might be a timing issue
-                  // Wait a bit and try again
-                  console.log('⏳ Waiting for session to be ready...');
-                  setTimeout(async () => {
-                    const retryUser = await authService.getCurrentUser();
-                    if (retryUser) {
-                      console.log('✅ User session found on retry:', retryUser.id);
-                      setVerifiedUserId(retryUser.id);
-                      handleNext('personal');
-                    } else {
-                      Alert.alert('Session Error', 'Please try logging in manually');
-                      handleNext('login');
+                  'Check Your Email',
+                  'We sent you a password reset link. Click the link in the email to reset your password.',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => navigation.navigate('Login')
                     }
-                  }, 1000);
+                  ]
+                );
+              }}
+            />
+          )}
+        </AuthStack.Screen>
+
+        <AuthStack.Screen name="Reset">
+          {({ navigation }) => (
+            <ResetPasswordScreen
+              onBack={() => navigation.navigate('Login')}
+              onPasswordReset={() => {
+                console.log('✅ Password reset successful');
+                navigation.navigate('Login');
+              }}
+            />
+          )}
+        </AuthStack.Screen>
+
+        <AuthStack.Screen name="Personal">
+          {({ navigation }) => (
+            <PersonalInfoScreen
+              onComplete={(personalData: { name: string; lastname: string; level: string }) => {
+                updateUserData(personalData);
+                navigation.navigate('Avatar');
+              }}
+              onBack={() => navigation.goBack()}
+              isCompletingRegistration={!!verifiedUserId}
+            />
+          )}
+        </AuthStack.Screen>
+
+        <AuthStack.Screen name="Avatar">
+          {({ navigation }) => (
+            <AvatarScreen
+              onAvatarComplete={async (avatarUri: string) => {
+                console.log('🖼️ Avatar selected, starting profile creation...');
+                updateUserData({ avatarUri });
+                await handleCreateProfile();
+              }}
+              userData={{
+                name: userData.name || 'User',
+                lastname: userData.lastname || '',
+                level: userData.level || 'Beginner'
+              }}
+              onBack={() => navigation.goBack()}
+            />
+          )}
+        </AuthStack.Screen>
+
+        <AuthStack.Screen name="Verification">
+          {({ navigation }) => (
+            <EmailVerificationScreen
+              email={userData.email || ''}
+              password={userData.password}
+              onVerificationComplete={async () => {
+                console.log('📧 Email verification complete!');
+                
+                try {
+                  const user = await authService.getCurrentUser();
+                  if (user) {
+                    console.log('✅ User session found:', user.id);
+                    setVerifiedUserId(user.id);
+                    navigation.navigate('Personal');
+                  } else {
+                    console.log('⏳ Waiting for session to be ready...');
+                    setTimeout(async () => {
+                      const retryUser = await authService.getCurrentUser();
+                      if (retryUser) {
+                        console.log('✅ User session found on retry:', retryUser.id);
+                        setVerifiedUserId(retryUser.id);
+                        navigation.navigate('Personal');
+                      } else {
+                        Alert.alert('Session Error', 'Please try logging in manually');
+                        navigation.navigate('Login');
+                      }
+                    }, 1000);
+                  }
+                } catch (error) {
+                  console.error('Error getting user session:', error);
+                  Alert.alert('Session Error', 'Please try logging in manually');
+                  navigation.navigate('Login');
                 }
-              } catch (error) {
-                console.error('Error getting user session:', error);
-                Alert.alert('Session Error', 'Please try logging in manually');
-                handleNext('login');
-              }
-            }}
-            onResendEmail={() => {
-              console.log('📧 Resending verification email to:', userData.email);
-            }}
-            onStartOver={async () => {
-              console.log('🔄 Starting over - clearing session and going to welcome');
-              try {
-                // Clear any existing session
-                await authService.signOut();
-                // Reset all state
-                setUserData({});
-                setVerifiedUserId(null);
-                setCurrentScreen('welcome');
-              } catch (error) {
-                console.error('Error starting over:', error);
-                setCurrentScreen('welcome');
-              }
-            }}
-          />
-        );
-
-      default:
-        return (
-          <WelcomeScreen
-            onSignUp={() => handleNext('city')}
-            onLogin={() => handleNext('login')}
-          />
-        );
-    }
-  };
-
-  return <View style={{ flex: 1 }}>{renderScreen()}</View>;
+              }}
+              onResendEmail={() => {
+                console.log('📧 Resending verification email to:', userData.email);
+              }}
+              onStartOver={async () => {
+                console.log('🔄 Starting over - clearing session and going to welcome');
+                try {
+                  await authService.signOut();
+                  setUserData({});
+                  setVerifiedUserId(null);
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Welcome' }],
+                  });
+                } catch (error) {
+                  console.error('Error starting over:', error);
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Welcome' }],
+                  });
+                }
+              }}
+            />
+          )}
+        </AuthStack.Screen>
+      </AuthStack.Navigator>
+    </NavigationContainer>
+  );
 } 

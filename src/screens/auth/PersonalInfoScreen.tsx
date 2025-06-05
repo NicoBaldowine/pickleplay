@@ -17,6 +17,8 @@ import {
 } from 'react-native';
 import { ArrowLeft, ChevronDown, Check } from 'lucide-react-native';
 import { COLORS } from '../../constants/colors';
+import { globalTextStyles } from '../../styles/globalStyles';
+import TopBar from '../../components/ui/TopBar';
 
 interface PersonalInfoScreenProps {
   onBack: () => void;
@@ -113,13 +115,14 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
       
-      <View style={styles.topBarActions}>
-        {!isCompletingRegistration && (
-          <TouchableOpacity onPress={onBack} style={styles.headerButtonLeft}>
-            <ArrowLeft size={ICON_SIZE_ACTION} color={ICON_COLOR_DARK} />
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* Header */}
+      {!isCompletingRegistration && (
+        <TopBar
+          title="Create an account"
+          leftIcon={<ArrowLeft size={24} color={COLORS.TEXT_PRIMARY} />}
+          onLeftIconPress={onBack}
+        />
+      )}
 
       <KeyboardAvoidingView 
         style={styles.keyboardAvoidingView}
@@ -132,27 +135,30 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.mainTitle}>
-            {isCompletingRegistration ? 'Complete Your Profile' : 'Personal Information'}
-          </Text>
-          
-          {isCompletingRegistration && (
-            <Text style={styles.descriptionText}>
-              Please complete your profile to start using the app
+          {/* Title Section */}
+          <View style={styles.titleSection}>
+            <Text style={styles.mainTitle}>
+              {isCompletingRegistration ? 'Complete Your Profile' : 'Create an account'}
             </Text>
-          )}
+            
+            {isCompletingRegistration && (
+              <Text style={styles.subtitle}>
+                Please complete your profile to start using the app
+              </Text>
+            )}
+          </View>
 
           {/* Name Input */}
           <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>First Name</Text>
+            <Text style={styles.inputLabel}>Email</Text>
             <TextInput
               ref={nameInputRef}
               style={styles.inputField}
-              placeholder="Enter your first name"
+              placeholder=""
               placeholderTextColor="#999"
               value={name}
               onChangeText={setName}
-              autoCapitalize="words"
+              autoCapitalize="none"
               returnKeyType="next"
               editable={!isLoading}
               onSubmitEditing={handleNameSubmit}
@@ -164,15 +170,15 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
 
           {/* Last Name Input */}
           <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>Last Name</Text>
+            <Text style={styles.inputLabel}>Password</Text>
             <TextInput
               ref={lastnameInputRef}
               style={styles.inputField}
-              placeholder="Enter your last name"
+              placeholder=""
               placeholderTextColor="#999"
               value={lastname}
               onChangeText={setLastname}
-              autoCapitalize="words"
+              secureTextEntry
               returnKeyType="done"
               editable={!isLoading}
               onSubmitEditing={handleLastnameSubmit}
@@ -181,41 +187,23 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
               }}
             />
           </View>
-
-          {/* Level Dropdown */}
-          <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>Pickleball Level</Text>
-            <TouchableOpacity 
-              style={styles.dropdownButton}
-              onPress={() => {
-                Keyboard.dismiss();
-                setShowLevelDropdown(true);
-              }}
-              disabled={isLoading}
-            >
-              <Text style={[styles.dropdownText, selectedLevel === '' && styles.placeholderText]}>
-                {getSelectedLevelLabel()}
-              </Text>
-              <ChevronDown size={ICON_SIZE_DROPDOWN} color={ICON_COLOR_MEDIUM} />
-            </TouchableOpacity>
-          </View>
         </ScrollView>
 
-        {/* Complete Profile Button */}
+        {/* Continue Button */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity 
             style={[
-              styles.completeButton, 
-              (!isFormValid || isLoading) && styles.completeButtonDisabled
+              styles.continueButton, 
+              (!isFormValid || isLoading) && styles.continueButtonDisabled
             ]}
             onPress={handleComplete}
             disabled={!isFormValid || isLoading}
           >
             <Text style={[
-              styles.completeButtonText,
-              (!isFormValid || isLoading) && styles.completeButtonTextDisabled
+              styles.continueButtonText,
+              (!isFormValid || isLoading) && styles.continueButtonTextDisabled
             ]}>
-              {isLoading ? 'Creating Account...' : 'Complete Profile'}
+              {isLoading ? 'Creating Account...' : 'Continue'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -259,39 +247,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
-  topBarActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  headerButtonLeft: {
-    padding: 8,
-  },
   keyboardAvoidingView: {
     flex: 1,
   },
   scrollContent: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
   scrollContentContainer: {
     paddingBottom: 20,
+    paddingTop: 20,
     flexGrow: 1,
+  },
+  titleSection: {
+    marginBottom: 32,
   },
   mainTitle: {
     fontSize: 28,
     fontFamily: 'InterTight-ExtraBold',
     fontWeight: '800',
     color: COLORS.TEXT_PRIMARY,
-    marginBottom: 24,
+    marginBottom: 8,
   },
-  descriptionText: {
+  subtitle: {
     fontSize: 16,
-    color: '#666',
-    marginBottom: 30,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_SECONDARY,
     lineHeight: 22,
   },
   inputSection: {
@@ -301,59 +283,62 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'InterTight-ExtraBold',
     fontWeight: '800',
-    color: '#000000',
+    color: COLORS.TEXT_PRIMARY,
     marginBottom: 8,
   },
   inputField: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+    backgroundColor: COLORS.BACKGROUND_SECONDARY,
+    borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
     fontSize: 16,
-    color: '#000000',
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
-    width: '100%',
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   dropdownButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+    backgroundColor: COLORS.BACKGROUND_SECONDARY,
+    borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: 'transparent',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   dropdownText: {
     fontSize: 16,
-    color: '#000000',
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
   },
   placeholderText: {
-    color: '#999',
+    color: COLORS.TEXT_SECONDARY,
   },
   buttonContainer: {
     padding: 16,
-    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
+    paddingBottom: Platform.OS === 'ios' ? 48 : 16,
   },
-  completeButton: {
-    backgroundColor: '#000000',
+  continueButton: {
+    backgroundColor: COLORS.TEXT_PRIMARY,
     borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  completeButtonDisabled: {
+  continueButtonDisabled: {
     opacity: 0.5,
   },
-  completeButtonText: {
+  continueButtonText: {
     fontSize: 16,
     fontFamily: 'InterTight-ExtraBold',
     fontWeight: '800',
-    color: 'white',
+    color: COLORS.BACKGROUND_PRIMARY,
   },
-  completeButtonTextDisabled: {
+  continueButtonTextDisabled: {
     opacity: 0.7,
   },
   modalOverlay: {
@@ -363,7 +348,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: 'white',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
     borderRadius: 16,
     padding: 20,
     width: '80%',
@@ -373,7 +358,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'InterTight-ExtraBold',
     fontWeight: '800',
-    color: '#333',
+    color: COLORS.TEXT_PRIMARY,
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -384,11 +369,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: COLORS.BACKGROUND_SECONDARY,
   },
   modalOptionText: {
     fontSize: 16,
-    color: '#333',
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
   },
 });
 

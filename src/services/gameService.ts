@@ -82,7 +82,7 @@ class GameService {
         // Don't fail the whole operation, game was created
       }
 
-      console.log('Game created successfully:', game.id);
+      console.log('Game scheduled successfully:', game.id);
       return { success: true, gameId: game.id };
     } catch (error) {
       console.error('Error creating game:', error);
@@ -93,7 +93,7 @@ class GameService {
 
   async getUserSchedules(userId: string): Promise<GameWithPlayers[]> {
     try {
-      // Get games where user is creator
+      // Get ONLY games where user is creator (not participant)
       const createdGamesResult = await supabaseClient.query(this.tableName, {
         select: '*',
         filters: { creator_id: userId },
@@ -105,46 +105,12 @@ class GameService {
         throw createdGamesResult.error;
       }
 
-      const createdGames = createdGamesResult.data || [];
+      // Filter out cancelled games in JavaScript
+      const createdGames = (createdGamesResult.data || []).filter((game: Game) => game.status !== 'cancelled');
 
-      // Get games where user is a participant
-      const participantGamesResult = await supabaseClient.query(this.gameUsersTable, {
-        select: 'game_id',
-        filters: { user_id: userId }
-      });
-
-      if (participantGamesResult.error) {
-        console.error('Error fetching participant games:', participantGamesResult.error);
-        throw participantGamesResult.error;
-      }
-
-      const participantGames = participantGamesResult.data || [];
-      const gameIds = participantGames.map((p: any) => p.game_id);
-      
-      let joinedGames: Game[] = [];
-      if (gameIds.length > 0) {
-        // Fetch each joined game individually (since 'in' is not supported)
-        const gamePromises = gameIds.map((gameId: string) =>
-          supabaseClient.query(this.tableName, {
-            select: '*',
-            filters: { id: gameId }
-          })
-        );
-
-        const gameResults = await Promise.all(gamePromises);
-        joinedGames = gameResults
-          .filter(result => !result.error && result.data)
-          .map(result => result.data)
-          .flat();
-      }
-
-      // Combine and deduplicate
-      const allGames = [...createdGames, ...joinedGames];
-      const uniqueGames = allGames.filter((game, index, self) => 
-        index === self.findIndex((g) => g.id === game.id)
-      );
-
-      return uniqueGames;
+      // Return ONLY games where user is creator
+      // Do NOT include games where user is just a participant
+      return createdGames;
     } catch (error) {
       console.error('Error fetching user schedules:', error);
       throw error;
@@ -308,10 +274,13 @@ class GameService {
         );
 
         const gameResults = await Promise.all(gamePromises);
-        joinedGames = gameResults
+        const allJoinedGames = gameResults
           .filter(result => !result.error && result.data)
           .map(result => result.data)
           .flat();
+
+        // Filter out cancelled games in JavaScript
+        joinedGames = allJoinedGames.filter((game: Game) => game.status !== 'cancelled');
 
         // Don't filter by creator_id - if user is in game_users, they accepted/joined the game
         // This includes cases where they are creator AND participant (like doubles games)
@@ -330,17 +299,76 @@ class GameService {
 
   async deleteSchedule(scheduleId: string, userId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      // Delete from games table (will cascade to game_users)
-      const { error } = await supabaseClient.from(this.tableName).delete().eq('id', scheduleId);
+      // Get game details before cancellation for notifications
+      const gameDetails = await this.getGameWithDetails(scheduleId);
+      if (!gameDetails) {
+        return { success: false, error: 'Game not found' };
+      }
 
-      if (error) {
-        console.error('Error deleting schedule:', error);
-        return { success: false, error: error.message || 'Failed to delete schedule' };
+      // Verify user is the creator
+      if (gameDetails.creator_id !== userId) {
+        return { success: false, error: 'Only the creator can cancel this game' };
+      }
+
+      // Get user profile for notification
+      const userProfile = await supabaseClient.query('profiles', {
+        select: '*',
+        filters: { id: userId },
+        single: true
+      });
+
+      const userName = userProfile.data?.full_name || 
+                      `${userProfile.data?.first_name || ''} ${userProfile.data?.last_name || ''}`.trim() || 
+                      'Someone';
+
+      // Update game status to 'cancelled' instead of deleting
+      const { error: updateError } = await supabaseClient
+        .from(this.tableName)
+        .update({ 
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', scheduleId);
+
+      if (updateError) {
+        console.error('Error cancelling schedule:', updateError);
+        return { success: false, error: updateError.message || 'Failed to cancel schedule' };
+      }
+
+      // Send cancellation notification to all participants (except creator)
+      if (gameDetails.players && gameDetails.players.length > 1) {
+        const participantIds = gameDetails.players
+          .filter(player => player.user_id !== userId)
+          .map(player => player.user_id);
+
+        // Send notification to each participant
+        for (const participantId of participantIds) {
+          try {
+            await notificationService.scheduleGameCancelledNotification(
+              scheduleId,
+              userName,
+              gameDetails.game_type,
+              gameDetails.scheduled_date,
+              gameDetails.scheduled_time
+            );
+          } catch (notificationError) {
+            console.error('Error sending cancellation notification:', notificationError);
+            // Continue with other notifications even if one fails
+          }
+        }
+      }
+
+      // Cancel any scheduled notifications for this game
+      try {
+        await notificationService.cancelGameNotifications(scheduleId);
+      } catch (notificationError) {
+        console.error('Error cancelling notifications:', notificationError);
+        // Don't fail the operation for notification errors
       }
 
       return { success: true };
     } catch (error) {
-      console.error('Error deleting schedule:', error);
+      console.error('Error cancelling schedule:', error);
       const message = error instanceof Error ? error.message : 'An unexpected error occurred';
       return { success: false, error: message };
     }
@@ -348,7 +376,7 @@ class GameService {
 
   async getAvailableGames(excludeUserId: string): Promise<GameWithPlayers[]> {
     try {
-      // Get all open games
+      // Get all open games (open status already excludes cancelled games)
       const result = await supabaseClient.query(this.tableName, {
         select: '*',
         filters: { status: 'open' },
