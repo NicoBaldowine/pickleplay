@@ -155,15 +155,77 @@ class GameService {
       // Get only games where user joined (not games they created)
       const joinedGames = await this.getUserJoinedGames(userId);
       
-      // Fetch creator profiles for all games
-      const gamesWithCreators = await Promise.all(
+      // Fetch opponent information for all games
+      const gamesWithOpponents = await Promise.all(
         joinedGames.map(async (game) => {
-          // Fetch creator profile
-          const creatorResult = await supabaseClient.query('profiles', {
-            select: '*',
-            filters: { id: game.creator_id },
-            single: true
+          // Get all participants in this game
+          const participantsResult = await supabaseClient.query(this.gameUsersTable, {
+            select: 'user_id',
+            filters: { game_id: game.id }
           });
+
+          const participants = participantsResult.data || [];
+          
+          // Find opponents (all participants except current user)
+          const opponentIds = participants
+            .map((p: any) => p.user_id)
+            .filter((id: string) => id !== userId);
+
+          let opponentInfo = {
+            name: 'Unknown Player',
+            imageUrl: game.game_type === 'singles' 
+              ? 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'
+              : 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'
+          };
+
+          if (opponentIds.length > 0) {
+            // Get opponent profiles
+            const opponentProfiles = await Promise.all(
+              opponentIds.map(async (opponentId: string) => {
+                const profileResult = await supabaseClient.query('profiles', {
+                  select: '*',
+                  filters: { id: opponentId },
+                  single: true
+                });
+                return profileResult.data;
+              })
+            );
+
+            const validOpponents = opponentProfiles.filter(profile => profile);
+
+            if (validOpponents.length > 0) {
+              if (game.game_type === 'singles') {
+                // For singles, show the single opponent
+                const opponent = validOpponents[0];
+                const opponentName = opponent.full_name || 
+                                   `${opponent.first_name || ''} ${opponent.last_name || ''}`.trim() || 
+                                   'Unknown Player';
+                opponentInfo = {
+                  name: opponentName,
+                  imageUrl: opponent.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'
+                };
+              } else {
+                // For doubles, show opponent team names
+                if (validOpponents.length >= 2) {
+                  const opponent1 = validOpponents[0];
+                  const opponent2 = validOpponents[1];
+                  const name1 = opponent1.first_name || opponent1.full_name?.split(' ')[0] || 'Player1';
+                  const name2 = opponent2.first_name || opponent2.full_name?.split(' ')[0] || 'Player2';
+                  opponentInfo = {
+                    name: `${name1} & ${name2}`,
+                    imageUrl: opponent1.avatar_url || 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'
+                  };
+                } else if (validOpponents.length === 1) {
+                  const opponent = validOpponents[0];
+                  const opponentName = opponent.first_name || opponent.full_name?.split(' ')[0] || 'Player';
+                  opponentInfo = {
+                    name: `${opponentName} (need partner)`,
+                    imageUrl: opponent.avatar_url || 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'
+                  };
+                }
+              }
+            }
+          }
 
           const userGame: UserGame = {
             id: game.id,
@@ -176,13 +238,23 @@ class GameService {
             status: new Date(`${game.scheduled_date}T${game.scheduled_time}`) > new Date() ? 'upcoming' : 'past',
             players_count: `${game.current_players}/${game.max_players}`,
             original_game: game,
-            creator: creatorResult.data || undefined // Add creator profile data
+            creator: { 
+              full_name: opponentInfo.name,
+              avatar_url: opponentInfo.imageUrl,
+              first_name: opponentInfo.name.split(' ')[0],
+              last_name: opponentInfo.name.split(' ')[1] || '',
+              id: opponentIds[0] || '',
+              email: '',
+              pickleball_level: 'beginner',
+              created_at: '',
+              updated_at: ''
+            } as Profile
           };
           return userGame;
         })
       );
 
-      return gamesWithCreators;
+      return gamesWithOpponents;
     } catch (error) {
       console.error('Error fetching user games:', error);
       throw error;
