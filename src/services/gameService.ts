@@ -1,6 +1,7 @@
 import { supabaseClient } from '../lib/supabase';
 import { Database } from '../lib/database.types';
 import { authService } from './authService';
+import { notificationService } from './notificationService';
 
 // Define types based on database schema
 export type GameType = 'singles' | 'doubles';
@@ -403,6 +404,12 @@ class GameService {
         return { success: false, error: 'You are already in this game' };
       }
 
+      // Get game details for notification
+      const gameDetails = await this.getGameWithDetails(gameId);
+      if (!gameDetails) {
+        return { success: false, error: 'Game not found' };
+      }
+
       // First attempt - Add user to game
       const { error } = await supabaseClient.from(this.gameUsersTable).insert({
         game_id: gameId,
@@ -460,6 +467,52 @@ class GameService {
         await supabaseClient.from(this.tableName).update({ current_players: newCount }).eq('id', gameId);
       }
 
+      // Send notification to game creator
+      if (gameDetails.creator_id !== userId) {
+        try {
+          // Get user profile for notification
+          const userProfile = await supabaseClient.query('profiles', {
+            select: '*',
+            filters: { id: userId },
+            single: true
+          });
+
+          const userName = userProfile.data?.full_name || 
+                          `${userProfile.data?.first_name || ''} ${userProfile.data?.last_name || ''}`.trim() || 
+                          'Someone';
+
+          await notificationService.scheduleGameAcceptedNotification(
+            gameId,
+            userName,
+            gameDetails.game_type,
+            gameDetails.scheduled_date,
+            gameDetails.scheduled_time
+          );
+        } catch (notificationError) {
+          console.error('Error sending game accepted notification:', notificationError);
+          // Don't fail the join operation if notification fails
+        }
+      }
+
+      // Schedule "game starting soon" notification for the user who joined
+      try {
+        const opponentName = gameDetails.creator?.full_name || 
+                            `${gameDetails.creator?.first_name || ''} ${gameDetails.creator?.last_name || ''}`.trim() || 
+                            'Your opponent';
+
+        await notificationService.scheduleGameStartingSoonNotification(
+          gameId,
+          opponentName,
+          gameDetails.game_type,
+          gameDetails.venue_name,
+          gameDetails.scheduled_date,
+          gameDetails.scheduled_time
+        );
+      } catch (notificationError) {
+        console.error('Error scheduling game starting soon notification:', notificationError);
+        // Don't fail the join operation if notification fails
+      }
+
       return { success: true };
     } catch (error: any) {
       console.error('Error joining game:', error);
@@ -515,6 +568,23 @@ class GameService {
 
   async cancelGame(gameId: string, userId: string): Promise<{ success: boolean; error?: string }> {
     try {
+      // Get game details for notification
+      const gameDetails = await this.getGameWithDetails(gameId);
+      if (!gameDetails) {
+        return { success: false, error: 'Game not found' };
+      }
+
+      // Get user profile for notification
+      const userProfile = await supabaseClient.query('profiles', {
+        select: '*',
+        filters: { id: userId },
+        single: true
+      });
+
+      const userName = userProfile.data?.full_name || 
+                      `${userProfile.data?.first_name || ''} ${userProfile.data?.last_name || ''}`.trim() || 
+                      'Someone';
+
       // Remove user from game
       const { error } = await supabaseClient.from(this.gameUsersTable).delete().eq('game_id', gameId);
 
@@ -533,6 +603,34 @@ class GameService {
       if (gameResult.data) {
         const newCount = Math.max((gameResult.data.current_players || 1) - 1, 0);
         await supabaseClient.from(this.tableName).update({ current_players: newCount }).eq('id', gameId);
+      }
+
+      // Send cancellation notification to other participants
+      if (gameDetails.players) {
+        const otherParticipants = gameDetails.players.filter(p => p.user_id !== userId);
+        
+        for (const participant of otherParticipants) {
+          try {
+            await notificationService.scheduleGameCancelledNotification(
+              gameId,
+              userName,
+              gameDetails.game_type,
+              gameDetails.scheduled_date,
+              gameDetails.scheduled_time
+            );
+          } catch (notificationError) {
+            console.error('Error sending game cancelled notification:', notificationError);
+            // Don't fail the cancel operation if notification fails
+          }
+        }
+      }
+
+      // Cancel all scheduled notifications for this game
+      try {
+        await notificationService.cancelGameNotifications(gameId);
+      } catch (notificationError) {
+        console.error('Error cancelling game notifications:', notificationError);
+        // Don't fail the cancel operation if notification cleanup fails
       }
 
       return { success: true };

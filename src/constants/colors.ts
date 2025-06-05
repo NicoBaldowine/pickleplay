@@ -15,6 +15,10 @@ export const COLORS = {
   ERROR: '#EF4444',
   WARNING: '#F59E0B',
   INFO: '#3B82F6',
+  
+  // Additional colors
+  PRIMARY: '#43A4BE',
+  WHITE: '#FFFFFF',
 };
 
 export default COLORS; 

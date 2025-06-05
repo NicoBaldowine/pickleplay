@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, Alert } from 'react-native';
+import { StyleSheet, View, Text, Alert, LogBox } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -11,6 +11,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Search, Calendar, Trophy, User, Home } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import { InterTight_800ExtraBold } from '@expo-google-fonts/inter-tight';
 
 // Import fonts
 import { fonts, fontFamily } from './src/config/fonts';
@@ -49,6 +51,9 @@ import { Profile } from './src/lib/supabase';
 
 // Import UI components for fallback CreateScreen
 import TopBar from './src/components/ui/TopBar';
+
+// Import notification service
+import { notificationService } from './src/services/notificationService';
 
 // Keep splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync();
@@ -674,7 +679,13 @@ export default function App() {
   const navigationRef = React.useRef<any>(null);
 
   // Load fonts
-  const [fontsLoaded] = useFonts(fonts);
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    InterTight_800ExtraBold,
+  });
 
   // Hide splash screen when fonts are loaded
   useEffect(() => {
@@ -713,6 +724,20 @@ export default function App() {
         subscription.unsubscribe();
       }
     };
+  }, []);
+
+  useEffect(() => {
+    // Initialize notifications
+    const initNotifications = async () => {
+      const success = await notificationService.initialize();
+      if (success) {
+        console.log('🔔 Notifications initialized successfully');
+      } else {
+        console.log('❌ Failed to initialize notifications');
+      }
+    };
+
+    initNotifications();
   }, []);
 
   const checkAuthState = async () => {
