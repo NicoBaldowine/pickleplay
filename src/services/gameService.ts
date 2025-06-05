@@ -270,8 +270,21 @@ class GameService {
 
       const games = result.data || [];
       
-      // Filter out games created by current user
-      const availableGames = games.filter((game: Game) => game.creator_id !== excludeUserId);
+      // Get games where user is already a participant
+      const participantGamesResult = await supabaseClient.query(this.gameUsersTable, {
+        select: 'game_id',
+        filters: { user_id: excludeUserId }
+      });
+
+      const participantGameIds = participantGamesResult.data 
+        ? participantGamesResult.data.map((p: any) => p.game_id)
+        : [];
+
+      // Filter out games created by current user AND games where user is already a participant
+      const availableGames = games.filter((game: Game) => 
+        game.creator_id !== excludeUserId && 
+        !participantGameIds.includes(game.id)
+      );
 
       return availableGames;
     } catch (error) {
@@ -291,10 +304,7 @@ class GameService {
       // Check if user is already in the game
       const existingResult = await supabaseClient.query(this.gameUsersTable, {
         select: 'id',
-        filters: [
-          ['game_id', gameId],
-          ['user_id', userId]
-        ],
+        filters: { game_id: gameId, user_id: userId },
         single: true
       });
 
@@ -350,7 +360,7 @@ class GameService {
       // For now, we'll do it manually by getting the game, incrementing, and updating
       const gameResult = await supabaseClient.query(this.tableName, {
         select: 'current_players',
-        filters: [['id', gameId]],
+        filters: { id: gameId },
         single: true
       });
 
@@ -388,7 +398,7 @@ class GameService {
             // Update current_players count for retry
             const gameResult = await supabaseClient.query(this.tableName, {
               select: 'current_players',
-              filters: [['id', gameId]],
+              filters: { id: gameId },
               single: true
             });
 
@@ -425,7 +435,7 @@ class GameService {
       // Update current_players count
       const gameResult = await supabaseClient.query(this.tableName, {
         select: 'current_players',
-        filters: [['id', gameId]],
+        filters: { id: gameId },
         single: true
       });
 
