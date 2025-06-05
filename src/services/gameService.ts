@@ -191,7 +191,7 @@ class GameService {
 
   async getUserJoinedGames(userId: string): Promise<Game[]> {
     try {
-      // Get games where user is a participant (not creator)
+      // Get games where user is a participant (regardless of creator status)
       const participantGamesResult = await supabaseClient.query(this.gameUsersTable, {
         select: 'game_id',
         filters: { user_id: userId }
@@ -221,8 +221,8 @@ class GameService {
           .map(result => result.data)
           .flat();
 
-        // Filter out games where the user is the creator (we only want joined games)
-        joinedGames = joinedGames.filter((game: Game) => game.creator_id !== userId);
+        // Don't filter by creator_id - if user is in game_users, they accepted/joined the game
+        // This includes cases where they are creator AND participant (like doubles games)
       }
 
       return joinedGames.sort((a, b) => {
