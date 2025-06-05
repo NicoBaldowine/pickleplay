@@ -155,9 +155,13 @@ class GameService {
       // Get only games where user joined (not games they created)
       const joinedGames = await this.getUserJoinedGames(userId);
       
+      console.log(`🎮 DEBUG: User ${userId} has ${joinedGames.length} joined games:`, joinedGames.map(g => ({ id: g.id, type: g.game_type, creator: g.creator_id })));
+      
       // Fetch opponent information for all games
       const gamesWithOpponents = await Promise.all(
         joinedGames.map(async (game) => {
+          console.log(`🔍 DEBUG: Processing game ${game.id}, type: ${game.game_type}, creator: ${game.creator_id}`);
+          
           // Get all participants in this game
           const participantsResult = await supabaseClient.query(this.gameUsersTable, {
             select: 'user_id',
@@ -165,11 +169,14 @@ class GameService {
           });
 
           const participants = participantsResult.data || [];
+          console.log(`👥 DEBUG: Game ${game.id} has participants:`, participants.map((p: any) => p.user_id));
           
           // Find opponents (all participants except current user)
           const opponentIds = participants
             .map((p: any) => p.user_id)
             .filter((id: string) => id !== userId);
+
+          console.log(`⚔️ DEBUG: Opponents for user ${userId} in game ${game.id}:`, opponentIds);
 
           let opponentInfo = {
             name: 'Unknown Player',
@@ -187,11 +194,13 @@ class GameService {
                   filters: { id: opponentId },
                   single: true
                 });
+                console.log(`👤 DEBUG: Profile for opponent ${opponentId}:`, profileResult.data);
                 return profileResult.data;
               })
             );
 
             const validOpponents = opponentProfiles.filter(profile => profile);
+            console.log(`✅ DEBUG: Valid opponent profiles:`, validOpponents.map(p => ({ id: p?.id, name: p?.full_name, first: p?.first_name })));
 
             if (validOpponents.length > 0) {
               if (game.game_type === 'singles') {
@@ -227,6 +236,8 @@ class GameService {
             }
           }
 
+          console.log(`🎯 DEBUG: Final opponent info for game ${game.id}:`, opponentInfo);
+
           const userGame: UserGame = {
             id: game.id,
             venue_name: game.venue_name,
@@ -253,6 +264,8 @@ class GameService {
           return userGame;
         })
       );
+
+      console.log(`🏁 DEBUG: Final games for user ${userId}:`, gamesWithOpponents.map(g => ({ id: g.id, opponentName: g.creator?.full_name, type: g.game_type })));
 
       return gamesWithOpponents;
     } catch (error) {
