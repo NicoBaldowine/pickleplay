@@ -1,4 +1,5 @@
 import { supabaseClient } from '../lib/supabase';
+import { locationService, UserLocation } from './locationService';
 
 export interface Court {
   id: string;
@@ -8,16 +9,19 @@ export interface Court {
   state: string;
   is_free: boolean;
   created_at: string;
+  latitude?: number;
+  longitude?: number;
   distance?: string; // Will be calculated based on user location
+  distanceValue?: number; // Numeric distance for sorting
 }
 
 class CourtsService {
   private readonly tableName = 'courts';
 
   /**
-   * Get all courts for a specific city
+   * Get all courts for a specific city with optional distance calculation
    */
-  async getCourtsByCity(city: string = 'Denver'): Promise<Court[]> {
+  async getCourtsByCity(city: string = 'Denver', includeDistance: boolean = true): Promise<Court[]> {
     try {
       console.log('🏟️ Fetching courts for city:', city);
       
@@ -32,12 +36,74 @@ class CourtsService {
         throw result.error;
       }
 
-      const courts = result.data || [];
+      let courts = result.data || [];
       console.log(`✅ Found ${courts.length} courts in ${city}`);
+
+      // Add distance calculations if requested
+      if (includeDistance) {
+        courts = await this.addDistancesToCourts(courts);
+      }
+
       return courts;
     } catch (error) {
       console.error('Error fetching courts:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Add distance calculations to courts and sort by proximity
+   */
+  async addDistancesToCourts(courts: Court[]): Promise<Court[]> {
+    try {
+      // Get user location
+      const locationResult = await locationService.getCurrentLocation();
+      
+      if (!locationResult.success || !locationResult.location) {
+        console.log('📍 Location not available, returning courts without distances');
+        return courts;
+      }
+
+      const userLocation = locationResult.location;
+      console.log('📍 Calculating distances from user location:', userLocation);
+
+      // Calculate distances for each court
+      const courtsWithDistance = courts.map(court => {
+        if (court.latitude && court.longitude) {
+          const distance = locationService.calculateDistance(
+            userLocation.latitude,
+            userLocation.longitude,
+            court.latitude,
+            court.longitude
+          );
+
+          return {
+            ...court,
+            distance: locationService.formatDistance(distance),
+            distanceValue: distance
+          };
+        } else {
+          // No coordinates available for this court
+          return {
+            ...court,
+            distance: 'Distance N/A',
+            distanceValue: 999 // Put courts without coordinates at the end
+          };
+        }
+      });
+
+      // Sort by distance (closest first)
+      courtsWithDistance.sort((a, b) => {
+        return (a.distanceValue || 999) - (b.distanceValue || 999);
+      });
+
+      console.log('✅ Distances calculated and courts sorted by proximity');
+      return courtsWithDistance;
+
+    } catch (error) {
+      console.error('Error calculating distances:', error);
+      // Return original courts if distance calculation fails
+      return courts;
     }
   }
 
