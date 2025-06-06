@@ -32,39 +32,58 @@ interface SchedulesScreenProps {
 const SchedulesScreen: React.FC<SchedulesScreenProps> = ({ user, profile, onCreateGame, refreshTrigger }) => {
   const [userSchedules, setUserSchedules] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigation = useNavigation();
 
   useEffect(() => {
-    loadUserSchedules();
+    loadInitialData();
   }, []);
 
-  useEffect(() => {
-    loadUserSchedules();
-  }, [user?.id]);
-
+  // Add effect to reload when refreshTrigger changes  
   useEffect(() => {
     if (refreshTrigger && refreshTrigger > 0) {
       loadUserSchedules();
     }
   }, [refreshTrigger]);
 
-  const loadUserSchedules = async () => {
+  const loadInitialData = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      if (user?.id) {
-        const schedules = await gameService.getUserSchedules(user.id);
+      // Get current user
+      const currentUser = await authService.getCurrentUser();
+      if (currentUser) {
+        // Fetch user's schedules
+        const schedules = await gameService.getUserSchedules(currentUser.id);
         setUserSchedules(schedules);
-      } else {
-        setUserSchedules([]);
       }
     } catch (err) {
       console.error('Error loading user schedules:', err);
       setError('Failed to load schedules');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadUserSchedules = async () => {
+    try {
+      setRefreshing(true);
+      setError(null);
+      
+      // Get current user
+      const currentUser = await authService.getCurrentUser();
+      if (currentUser) {
+        // Fetch user's schedules
+        const schedules = await gameService.getUserSchedules(currentUser.id);
+        setUserSchedules(schedules);
+      }
+    } catch (err) {
+      console.error('Error loading user schedules:', err);
+      setError('Failed to load schedules');
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -179,7 +198,7 @@ const SchedulesScreen: React.FC<SchedulesScreenProps> = ({ user, profile, onCrea
 
   const renderLoadingState = () => (
     <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color="#007AFF" />
+      <ActivityIndicator size="large" color="#000000" />
       <Text style={styles.loadingText}>Loading schedules...</Text>
     </View>
   );
@@ -209,9 +228,10 @@ const SchedulesScreen: React.FC<SchedulesScreenProps> = ({ user, profile, onCrea
         contentContainerStyle={styles.scrollViewContent}
         refreshControl={
           <RefreshControl
-            refreshing={loading}
+            refreshing={refreshing}
             onRefresh={loadUserSchedules}
-            tintColor="#007AFF"
+            tintColor="#000000"
+            colors={['#000000']}
           />
         }
       >
@@ -290,7 +310,7 @@ const styles = StyleSheet.create({
     minHeight: 60,
   },
   listItem: {
-    marginBottom: 8,
+    // Removed marginBottom: 8 to use gap: 12 from container
   },
   emptyStateContainer: {
     flex: 1,
@@ -336,6 +356,7 @@ const styles = StyleSheet.create({
   },
   schedulesListContainer: {
     flex: 1,
+    gap: 8,
   },
   descriptionFirstLine: {
     ...globalTextStyles.bodySmall,

@@ -97,7 +97,7 @@ const DoublesStep: React.FC<DoublesStepProps> = ({ onClose, onBack, onSelectPart
         {/* Loading state */}
         {loading && (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
+            <ActivityIndicator size="large" color="#000000" />
             <Text style={styles.loadingText}>Loading partners...</Text>
           </View>
         )}

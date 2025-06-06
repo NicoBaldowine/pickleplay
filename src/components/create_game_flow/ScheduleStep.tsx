@@ -38,8 +38,27 @@ const ScheduleStep: React.FC<ScheduleStepProps> = ({
   onSchedule,
   isSubmitting,
 }) => {
+  // Helper function to round time to next 15-minute interval
+  const roundToNext15Minutes = () => {
+    const now = new Date();
+    const minutes = now.getMinutes();
+    const roundedMinutes = Math.ceil(minutes / 15) * 15;
+    
+    if (roundedMinutes === 60) {
+      // If we round to 60 minutes, move to next hour
+      now.setHours(now.getHours() + 1);
+      now.setMinutes(0);
+    } else {
+      now.setMinutes(roundedMinutes);
+    }
+    
+    now.setSeconds(0);
+    now.setMilliseconds(0);
+    return now;
+  };
+
   const [date, setDate] = useState(new Date());
-  const [time, setTime] = useState(new Date());
+  const [time, setTime] = useState(roundToNext15Minutes());
   
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -47,10 +66,49 @@ const ScheduleStep: React.FC<ScheduleStepProps> = ({
   const [tempDate, setTempDate] = useState(new Date());
   const [tempTime, setTempTime] = useState(new Date());
 
+  // Helper function to check if selected time is in the past
+  const isTimeInPast = (selectedDate: Date, selectedTime: Date) => {
+    const now = new Date();
+    const combinedDateTime = new Date(
+      selectedDate.getFullYear(),
+      selectedDate.getMonth(),
+      selectedDate.getDate(),
+      selectedTime.getHours(),
+      selectedTime.getMinutes(),
+      0,
+      0
+    );
+    return combinedDateTime < now;
+  };
+
+  // Helper function to get minimum time for a given date
+  const getMinimumTimeForDate = (checkDate: Date) => {
+    const now = new Date();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const checkDateOnly = new Date(checkDate);
+    checkDateOnly.setHours(0, 0, 0, 0);
+    
+    // If check date is today, minimum time is current time rounded up to next 15-min interval
+    if (checkDateOnly.getTime() === today.getTime()) {
+      return roundToNext15Minutes();
+    }
+    
+    // If check date is in the future, no minimum time restriction
+    return null;
+  };
+
   const onDateChangeAndroid = (event: DateTimePickerEvent, selectedDate?: Date) => {
     setShowDatePicker(false);
     if (event.type === 'set' && selectedDate) {
       setDate(selectedDate);
+      
+      // If we selected today and current time is in the past, update time to valid minimum
+      const minimumTime = getMinimumTimeForDate(selectedDate);
+      if (minimumTime && isTimeInPast(selectedDate, time)) {
+        setTime(minimumTime);
+      }
     }
   };
 
@@ -61,6 +119,16 @@ const ScheduleStep: React.FC<ScheduleStepProps> = ({
       
       // Validate time for Android
       if (hour >= 6 && hour <= 23) {
+        // Check if the selected time is in the past
+        if (isTimeInPast(date, selectedTime)) {
+          Alert.alert(
+            'Invalid Time',
+            'You cannot schedule a game in the past. Please select a future time.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        
         setTime(selectedTime);
       } else {
         Alert.alert(
@@ -82,15 +150,20 @@ const ScheduleStep: React.FC<ScheduleStepProps> = ({
   };
   const confirmDateIOS = () => {
     setDate(new Date(tempDate));
+    
+    // If we selected today and current time is in the past, update time to valid minimum
+    const minimumTime = getMinimumTimeForDate(tempDate);
+    if (minimumTime && isTimeInPast(tempDate, time)) {
+      setTime(minimumTime);
+    }
+    
     setShowDatePicker(false);
   };
 
   const handleOpenTimePickerIOS = () => {
-    // Set default time to 6:00 AM if current time is outside allowed range
-    const now = new Date();
-    const currentHour = now.getHours();
-    
+    // Use current time value, but ensure it's properly rounded
     let defaultTime = new Date(time);
+    const currentHour = defaultTime.getHours();
     
     // If current time is between 12 AM (0) and 5 AM, set to 6 AM
     if (currentHour >= 0 && currentHour < 6) {
@@ -99,6 +172,12 @@ const ScheduleStep: React.FC<ScheduleStepProps> = ({
     // If current time is after 11 PM, set to 6 AM next day
     else if (currentHour >= 23) {
       defaultTime.setHours(6, 0, 0, 0);
+    }
+    
+    // If the current time would be in the past for the selected date, use minimum valid time
+    const minimumTime = getMinimumTimeForDate(date);
+    if (minimumTime && isTimeInPast(date, defaultTime)) {
+      defaultTime = new Date(minimumTime);
     }
     
     setTempTime(new Date(defaultTime));
@@ -111,7 +190,18 @@ const ScheduleStep: React.FC<ScheduleStepProps> = ({
       
       // Restrict hours between 6 AM (6) and 11 PM (23)
       if (hour >= 6 && hour <= 23) {
-        setTempTime(selectedTime);
+        // Check if this time would be in the past for the selected date
+        if (isTimeInPast(date, selectedTime)) {
+          // If it's in the past, use the minimum valid time
+          const minimumTime = getMinimumTimeForDate(date);
+          if (minimumTime) {
+            setTempTime(minimumTime);
+          } else {
+            setTempTime(selectedTime);
+          }
+        } else {
+          setTempTime(selectedTime);
+        }
       } else {
         // If invalid hour selected, adjust to nearest valid time
         const adjustedTime = new Date(selectedTime);
@@ -120,7 +210,18 @@ const ScheduleStep: React.FC<ScheduleStepProps> = ({
         } else {
           adjustedTime.setHours(23, 0, 0, 0);
         }
-        setTempTime(adjustedTime);
+        
+        // Check if adjusted time is still in the past
+        if (isTimeInPast(date, adjustedTime)) {
+          const minimumTime = getMinimumTimeForDate(date);
+          if (minimumTime) {
+            setTempTime(minimumTime);
+          } else {
+            setTempTime(adjustedTime);
+          }
+        } else {
+          setTempTime(adjustedTime);
+        }
       }
     }
   };
@@ -130,6 +231,16 @@ const ScheduleStep: React.FC<ScheduleStepProps> = ({
     
     // Final validation before confirming
     if (hour >= 6 && hour <= 23) {
+      // Check if the selected time is in the past
+      if (isTimeInPast(date, tempTime)) {
+        Alert.alert(
+          'Invalid Time',
+          'You cannot schedule a game in the past. Please select a future time.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
       setTime(new Date(tempTime));
       setShowTimePicker(false);
     } else {

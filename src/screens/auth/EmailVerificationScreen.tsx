@@ -6,6 +6,7 @@ import {
   Alert,
   TouchableOpacity,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +15,7 @@ import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import { supabaseClient } from '../../lib/supabase';
 import { authService } from '../../services/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { COLORS } from '../../constants/colors';
 
 interface EmailVerificationScreenProps {
   email: string;
@@ -30,17 +32,7 @@ export default function EmailVerificationScreen({
   onResendEmail,
   onStartOver
 }: EmailVerificationScreenProps) {
-  const [isResending, setIsResending] = useState(false);
-  const [countdown, setCountdown] = useState(60);
   const [isVerifying, setIsVerifying] = useState(false);
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    if (countdown > 0) {
-      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [countdown]);
 
   // Handle deep linking for email verification
   useEffect(() => {
@@ -134,160 +126,26 @@ export default function EmailVerificationScreen({
     };
   }, [onVerificationComplete, email, password]);
 
-  const resendVerificationEmail = async () => {
-    if (countdown > 0) return;
-
-    setIsResending(true);
-    try {
-      console.log('📧 Resending verification email...');
-      
-      // Recreate account WITHOUT metadata
-      const { data, error } = await supabaseClient.auth.signUp({
-        email: email,
-        password: password || 'temp_password_123456',
-        options: {
-          emailRedirectTo: 'exp://10.0.0.48:8081/--/email-verified',
-          // NO DATA/METADATA
-        }
-      });
-      
-      if (error && !error.message?.includes('already registered')) {
-        console.error('❌ Failed to resend email:', error);
-        Alert.alert('Error', 'Failed to resend verification email.');
-      } else {
-        console.log('✅ Verification email resent to:', email);
-        console.log('🔗 Email will redirect to: exp://10.0.0.48:8081/--/email-verified');
-        Alert.alert('Email Sent', 'A new verification email has been sent to your inbox.');
-        setCountdown(60);
-      }
-      
-      onResendEmail?.();
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to resend verification email.');
-    } finally {
-      setIsResending(false);
-    }
-  };
-
-  const handleManualContinue = async () => {
-    setIsVerifying(true);
-    try {
-      console.log('🔄 Manual continue - checking user session...');
-      
-      // Try to get current user session
-      const user = await authService.getCurrentUser();
-      if (user) {
-        console.log('✅ User session found, continuing to profile setup');
-        setIsVerifying(false);
-        onVerificationComplete();
-        return;
-      }
-      
-      // If no user, try to sign in with email/password
-      if (password) {
-        console.log('🔐 Attempting to sign in with stored credentials...');
-        const response = await authService.signIn(email, password);
-        if (response.success) {
-          console.log('✅ Sign in successful, continuing to profile setup');
-          setIsVerifying(false);
-          onVerificationComplete();
-          return;
-        }
-      }
-      
-      // If all else fails, show message
-      Alert.alert(
-        'Email Not Verified',
-        'Please click the verification link in your email first, then try again.',
-        [{ text: 'OK' }]
-      );
-      
-    } catch (error) {
-      console.error('Error in manual continue:', error);
-      Alert.alert(
-        'Verification Error',
-        'Please make sure you have clicked the verification link in your email.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
       <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Ionicons name="mail" size={80} color="#1a1a1a" />
-          <Text style={styles.title}>Check Your Email 📧</Text>
-          <Text style={styles.subtitle}>
-            We've sent a verification link to{'\n'}
-            <Text style={styles.emailText}>{email}</Text>
-          </Text>
-        </View>
-
-        {/* Main Message */}
-        <View style={styles.messageContainer}>
-          <Text style={styles.mainMessage}>
-            Click the verification link in your email to verify your account.
-          </Text>
-          <Text style={styles.subMessage}>
-            After verification, you'll automatically return to the app to complete your profile.
-          </Text>
-        </View>
-
+        {/* Email Icon */}
+        <Ionicons name="mail" size={48} color={COLORS.TEXT_PRIMARY} style={styles.emailIcon} />
+        
+        {/* Title */}
+        <Text style={styles.title}>Check your email</Text>
+        
+        {/* Description */}
+        <Text style={styles.description}>
+          We've sent the verification link to {email}
+        </Text>
+        
         {/* Verifying indicator */}
         {isVerifying && (
           <View style={styles.verifyingContainer}>
-            <ActivityIndicator size="large" color="#1a1a1a" />
-            <Text style={styles.verifyingText}>Verifying your email...</Text>
-          </View>
-        )}
-
-        {/* Manual Continue Button */}
-        <View style={styles.manualSection}>
-          <Text style={styles.manualText}>Already verified your email?</Text>
-          <TouchableOpacity
-            style={styles.manualButton}
-            onPress={handleManualContinue}
-            disabled={isVerifying}
-          >
-            <Text style={styles.manualButtonText}>Continue to Profile Setup</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Resend Section */}
-        <View style={styles.resendSection}>
-          <Text style={styles.resendText}>Didn't receive the email?</Text>
-          <TouchableOpacity
-            style={[
-              styles.resendButton,
-              (countdown > 0 || isResending) && styles.resendButtonDisabled
-            ]}
-            onPress={resendVerificationEmail}
-            disabled={countdown > 0 || isResending}
-          >
-            {isResending ? (
-              <ActivityIndicator size="small" color="#1a1a1a" />
-            ) : (
-              <Text style={styles.resendButtonText}>
-                {countdown > 0 ? `Resend in ${countdown}s` : 'Resend Email'}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Start Over Section */}
-        {onStartOver && (
-          <View style={styles.startOverSection}>
-            <Text style={styles.startOverText}>Having trouble?</Text>
-            <TouchableOpacity
-              style={styles.startOverButton}
-              onPress={onStartOver}
-            >
-              <Text style={styles.startOverButtonText}>Start Over</Text>
-            </TouchableOpacity>
+            <ActivityIndicator size="large" color={COLORS.TEXT_PRIMARY} />
           </View>
         )}
       </View>
@@ -298,116 +156,34 @@ export default function EmailVerificationScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
   content: {
-    width: '80%',
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 20,
+    paddingHorizontal: 16,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 10,
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
+    textAlign: 'center',
+    marginBottom: 16,
   },
-  subtitle: {
+  description: {
     fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_SECONDARY,
     textAlign: 'center',
-    marginTop: 10,
-  },
-  emailText: {
-    fontWeight: 'bold',
-  },
-  messageContainer: {
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  mainMessage: {
-    fontSize: 18,
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  subMessage: {
-    fontSize: 14,
-    textAlign: 'center',
-    color: '#666',
+    lineHeight: 22,
   },
   verifyingContainer: {
-    alignItems: 'center',
-    marginTop: 20,
+    marginTop: 32,
   },
-  verifyingText: {
-    fontSize: 16,
-    marginTop: 10,
-    color: '#666',
-  },
-  manualSection: {
-    alignItems: 'center',
-    marginTop: 30,
-    marginBottom: 20,
-  },
-  manualText: {
-    fontSize: 16,
-    marginBottom: 15,
-    color: '#333',
-  },
-  manualButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  manualButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  resendSection: {
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  resendText: {
-    fontSize: 16,
-    marginBottom: 10,
-  },
-  resendButton: {
-    backgroundColor: '#1a1a1a',
-    padding: 10,
-    borderRadius: 5,
-  },
-  resendButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  resendButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  startOverSection: {
-    alignItems: 'center',
-    marginTop: 30,
-  },
-  startOverText: {
-    fontSize: 14,
-    marginBottom: 10,
-    color: '#666',
-  },
-  startOverButton: {
-    backgroundColor: 'transparent',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#FF6B6B',
-  },
-  startOverButtonText: {
-    color: '#FF6B6B',
-    fontSize: 14,
-    fontWeight: '600',
+  emailIcon: {
+    marginBottom: 16,
   },
 });

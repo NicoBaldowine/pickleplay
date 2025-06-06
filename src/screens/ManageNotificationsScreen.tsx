@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, Switch, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, Switch, ScrollView, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ArrowLeft } from 'lucide-react-native';
@@ -62,11 +62,15 @@ const ManageNotificationsScreen: React.FC<ManageNotificationsScreenProps> = ({ o
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={[]}>
+        <StatusBar barStyle="dark-content" />
         <TopBar 
           title="Manage Notifications" 
-          leftIcon={<ArrowLeft size={24} color={COLORS.TEXT_PRIMARY} />}
+          leftIcon={<ArrowLeft size={24} color="#000000" />}
           onLeftIconPress={onBack}
+          style={styles.topBar}
+          titleContainerStyle={styles.titleContainer}
+          titleStyle={styles.titleStyle}
         />
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading...</Text>
@@ -76,18 +80,18 @@ const ManageNotificationsScreen: React.FC<ManageNotificationsScreenProps> = ({ o
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={[]}>
+      <StatusBar barStyle="dark-content" />
       <TopBar 
         title="Manage Notifications" 
-        leftIcon={<ArrowLeft size={24} color={COLORS.TEXT_PRIMARY} />}
+        leftIcon={<ArrowLeft size={24} color="#000000" />}
         onLeftIconPress={onBack}
+        style={styles.topBar}
+        titleContainerStyle={styles.titleContainer}
+        titleStyle={styles.titleStyle}
       />
       
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.description}>
-          Choose which notifications you'd like to receive to stay updated on your games.
-        </Text>
-
         <View style={styles.settingsSection}>
           <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
@@ -99,8 +103,8 @@ const ManageNotificationsScreen: React.FC<ManageNotificationsScreenProps> = ({ o
             <Switch
               value={settings.gameAccepted}
               onValueChange={(value) => handleToggle('gameAccepted', value)}
-              trackColor={{ false: COLORS.BACKGROUND_SECONDARY, true: COLORS.PRIMARY }}
-              thumbColor={settings.gameAccepted ? COLORS.WHITE : COLORS.TEXT_SECONDARY}
+              trackColor={{ false: '#E0E0E0', true: '#000000' }}
+              thumbColor={settings.gameAccepted ? '#FFFFFF' : '#F4F4F4'}
             />
           </View>
 
@@ -114,8 +118,8 @@ const ManageNotificationsScreen: React.FC<ManageNotificationsScreenProps> = ({ o
             <Switch
               value={settings.gameExpired}
               onValueChange={(value) => handleToggle('gameExpired', value)}
-              trackColor={{ false: COLORS.BACKGROUND_SECONDARY, true: COLORS.PRIMARY }}
-              thumbColor={settings.gameExpired ? COLORS.WHITE : COLORS.TEXT_SECONDARY}
+              trackColor={{ false: '#E0E0E0', true: '#000000' }}
+              thumbColor={settings.gameExpired ? '#FFFFFF' : '#F4F4F4'}
             />
           </View>
 
@@ -129,8 +133,8 @@ const ManageNotificationsScreen: React.FC<ManageNotificationsScreenProps> = ({ o
             <Switch
               value={settings.gameCancelled}
               onValueChange={(value) => handleToggle('gameCancelled', value)}
-              trackColor={{ false: COLORS.BACKGROUND_SECONDARY, true: COLORS.PRIMARY }}
-              thumbColor={settings.gameCancelled ? COLORS.WHITE : COLORS.TEXT_SECONDARY}
+              trackColor={{ false: '#E0E0E0', true: '#000000' }}
+              thumbColor={settings.gameCancelled ? '#FFFFFF' : '#F4F4F4'}
             />
           </View>
 
@@ -144,17 +148,10 @@ const ManageNotificationsScreen: React.FC<ManageNotificationsScreenProps> = ({ o
             <Switch
               value={settings.gameStartingSoon}
               onValueChange={(value) => handleToggle('gameStartingSoon', value)}
-              trackColor={{ false: COLORS.BACKGROUND_SECONDARY, true: COLORS.PRIMARY }}
-              thumbColor={settings.gameStartingSoon ? COLORS.WHITE : COLORS.TEXT_SECONDARY}
+              trackColor={{ false: '#E0E0E0', true: '#000000' }}
+              thumbColor={settings.gameStartingSoon ? '#FFFFFF' : '#F4F4F4'}
             />
           </View>
-        </View>
-
-        <View style={styles.noteSection}>
-          <Text style={styles.noteTitle}>Note</Text>
-          <Text style={styles.noteText}>
-            Make sure to allow notifications for PicklePlay in your device settings to receive these alerts.
-          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -181,14 +178,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.TEXT_SECONDARY,
   },
-  description: {
-    fontSize: 16,
-    color: COLORS.TEXT_SECONDARY,
-    marginBottom: 24,
-    lineHeight: 22,
-  },
   settingsSection: {
-    backgroundColor: COLORS.WHITE,
+    backgroundColor: '#F5E9CF',
     borderRadius: 12,
     padding: 4,
     marginBottom: 24,
@@ -199,8 +190,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.BACKGROUND_SECONDARY,
   },
   settingInfo: {
     flex: 1,
@@ -208,7 +197,8 @@ const styles = StyleSheet.create({
   },
   settingTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
     color: COLORS.TEXT_PRIMARY,
     marginBottom: 4,
   },
@@ -217,21 +207,22 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT_SECONDARY,
     lineHeight: 18,
   },
-  noteSection: {
-    backgroundColor: COLORS.BACKGROUND_SECONDARY,
-    borderRadius: 12,
-    padding: 16,
+  topBar: {
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
-  noteTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.TEXT_PRIMARY,
-    marginBottom: 8,
+  titleContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  noteText: {
-    fontSize: 14,
-    color: COLORS.TEXT_SECONDARY,
-    lineHeight: 18,
+  titleStyle: {
+    fontSize: 20,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#000000',
+    textAlign: 'center',
   },
 });
 

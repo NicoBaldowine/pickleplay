@@ -24,20 +24,44 @@ const defaultFilters: GameFilters = {
   gameTypes: {
     singles: true,
     doubles: true,
+    all: true,
   },
   skillLevels: {
     beginner: true,
     intermediate: true,
     advanced: true,
     expert: true,
+    all: true,
   },
   radius: 25, // default to 25 miles
 };
+
+// Skeleton Loader Component
+const SkeletonListItem = () => (
+  <View style={styles.skeletonItem}>
+    {/* Avatar skeleton */}
+    <View style={styles.skeletonAvatar} />
+    
+    {/* Content skeleton */}
+    <View style={styles.skeletonContent}>
+      {/* Title skeleton */}
+      <View style={styles.skeletonTitle} />
+      
+      {/* Chips skeleton */}
+      <View style={styles.skeletonChips}>
+        <View style={[styles.skeletonChip, styles.skeletonChipLarge]} />
+        <View style={[styles.skeletonChip, styles.skeletonChipMedium]} />
+        <View style={[styles.skeletonChip, styles.skeletonChipSmall]} />
+      </View>
+    </View>
+  </View>
+);
 
 const SearchScreen: React.FC = () => {
   const [games, setGames] = useState<GameWithPlayers[]>([]);
   const [filteredGames, setFilteredGames] = useState<GameWithPlayers[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<GameFilters>(defaultFilters);
   
@@ -57,14 +81,14 @@ const SearchScreen: React.FC = () => {
   );
 
   useEffect(() => {
-    loadAvailableGames();
+    loadInitialData();
   }, []);
 
   useEffect(() => {
     applyFilters();
   }, [games, filters]);
 
-  const loadAvailableGames = async () => {
+  const loadInitialData = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -84,11 +108,34 @@ const SearchScreen: React.FC = () => {
     }
   };
 
+  const loadAvailableGames = async () => {
+    try {
+      setRefreshing(true);
+      setError(null);
+      
+      // Get current user to exclude their games
+      const currentUser = await authService.getCurrentUser();
+      const currentUserId = currentUser?.id || 'current_user_id';
+      
+      // Fetch available games with details
+      const availableGames = await gameService.getAvailableGamesWithDetails(currentUserId);
+      setGames(availableGames);
+    } catch (err) {
+      console.error('Error loading games:', err);
+      setError('Failed to load games');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const applyFilters = () => {
     let filtered = games;
 
     // Filter by game type
-    if (!filters.gameTypes.singles && !filters.gameTypes.doubles) {
+    if (filters.gameTypes.all) {
+      // If "All" is selected, show both singles and doubles
+      // No filtering needed, show all game types
+    } else if (!filters.gameTypes.singles && !filters.gameTypes.doubles) {
       // If no game types selected, show nothing
       filtered = [];
     } else if (!filters.gameTypes.singles) {
@@ -98,14 +145,22 @@ const SearchScreen: React.FC = () => {
     }
 
     // Filter by skill level
-    const selectedLevels = Object.entries(filters.skillLevels)
-      .filter(([_, isSelected]) => isSelected)
-      .map(([level, _]) => level);
-    
-    if (selectedLevels.length > 0) {
-      filtered = filtered.filter(game => 
-        selectedLevels.includes(game.skill_level.toLowerCase())
-      );
+    if (filters.skillLevels.all) {
+      // If "All" is selected, show all skill levels
+      // No filtering needed, show all skill levels
+    } else {
+      const selectedLevels = Object.entries(filters.skillLevels)
+        .filter(([level, isSelected]) => level !== 'all' && isSelected)
+        .map(([level, _]) => level);
+      
+      if (selectedLevels.length > 0) {
+        filtered = filtered.filter(game => 
+          selectedLevels.includes(game.skill_level.toLowerCase())
+        );
+      } else {
+        // If no skill levels selected, show nothing
+        filtered = [];
+      }
     }
 
     // TODO: Filter by distance when location services are implemented
@@ -216,10 +271,11 @@ const SearchScreen: React.FC = () => {
     </View>
   );
 
-  const renderLoadingState = () => (
-    <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color="#007AFF" />
-      <Text style={styles.loadingText}>Loading games...</Text>
+  const renderSkeletonLoader = () => (
+    <View style={styles.gamesListContainer}>
+      {Array.from({ length: 6 }).map((_, index) => (
+        <SkeletonListItem key={index} />
+      ))}
     </View>
   );
 
@@ -255,18 +311,21 @@ const SearchScreen: React.FC = () => {
         contentContainerStyle={styles.scrollViewContent}
         refreshControl={
           <RefreshControl
-            refreshing={loading}
+            refreshing={refreshing}
             onRefresh={loadAvailableGames}
-            tintColor="#007AFF"
+            tintColor="#000000"
+            colors={['#000000']}
           />
         }
       >
         {loading ? (
-          renderLoadingState()
+          renderSkeletonLoader()
         ) : error ? (
           renderErrorState()
         ) : filteredGames.length > 0 ? (
-          filteredGames.map(renderGameItem)
+          <View style={styles.gamesListContainer}>
+            {filteredGames.map(renderGameItem)}
+          </View>
         ) : (
           renderEmptyState()
         )}
@@ -324,7 +383,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   listItem: {
-    marginBottom: 8,
+    // Using gap: 12 from container for consistent spacing
   },
   emptyStateContainer: {
     flex: 1,
@@ -349,16 +408,55 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  loadingContainer: {
+  gamesListContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 64,
+    gap: 8,
   },
-  loadingText: {
-    fontSize: 16,
-    color: '#888',
-    marginTop: 12,
+  skeletonItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5E9CF',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    minHeight: 80,
+  },
+  skeletonAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.07)',
+    marginRight: 12,
+  },
+  skeletonContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  skeletonTitle: {
+    height: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.07)',
+    borderRadius: 9,
+    marginBottom: 10,
+    width: '70%',
+  },
+  skeletonChips: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  skeletonChip: {
+    height: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.07)',
+    borderRadius: 10,
+  },
+  skeletonChipLarge: {
+    width: 100,
+  },
+  skeletonChipMedium: {
+    width: 80,
+  },
+  skeletonChipSmall: {
+    width: 60,
   },
 });
 

@@ -45,30 +45,55 @@ const CitySelectionScreen: React.FC<CitySelectionScreenProps> = ({ onBack, onCit
   };
 
   const handleAnotherCityPress = () => {
-    if (Platform.OS === 'ios') {
-      Alert.prompt(
-        'Enter your city',
-        'Please enter the name of your city:',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
+    Alert.alert(
+      'City Not Listed?',
+      'Currently, we only support the cities listed above. However, you can add your city to help us expand our coverage in the future.',
+      [
+        {
+          text: 'Got it',
+          style: 'cancel',
+        },
+        {
+          text: 'Add your city',
+          onPress: () => {
+            if (Platform.OS === 'ios') {
+              Alert.prompt(
+                'Add Your City',
+                'Please enter the name of your city:',
+                [
+                  {
+                    text: 'Cancel',
+                    style: 'cancel',
+                  },
+                  {
+                    text: 'Add City',
+                    onPress: (cityName) => {
+                      if (cityName && cityName.trim()) {
+                        console.log('🏙️ User added city:', cityName.trim());
+                        Alert.alert(
+                          'Thank You!',
+                          `We've noted your interest in ${cityName.trim()}. We'll consider adding it in future updates!`,
+                          [{ text: 'OK' }]
+                        );
+                        // Don't navigate to next screen, keep user here
+                      }
+                    },
+                  },
+                ],
+                'plain-text'
+              );
+            } else {
+              // For Android, show a simpler flow
+              Alert.alert(
+                'Add Your City',
+                'Please contact us through the app to request your city be added.',
+                [{ text: 'OK' }]
+              );
+            }
           },
-          {
-            text: 'Continue',
-            onPress: (cityName) => {
-              if (cityName && cityName.trim()) {
-                onCitySelected(cityName.trim());
-              }
-            },
-          },
-        ],
-        'plain-text'
-      );
-    } else {
-      // For Android, you could use a different approach or Alert.alert
-      Alert.alert('Enter City', 'Please use one of the available cities for now.');
-    }
+        },
+      ]
+    );
   };
 
   return (
@@ -139,7 +164,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   listItem: {
-    marginBottom: 8,
     height: 60,
     paddingVertical: 12,
     paddingHorizontal: 12,

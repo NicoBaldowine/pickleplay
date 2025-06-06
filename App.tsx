@@ -485,7 +485,7 @@ function EditPartnerScreenWrapper({ route, navigation }: any) {
 }
 
 // Tab Navigator Component
-function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefreshTrigger, onNavigateToSchedules, onNavigateToGames, onSignOut, navigationRef, onProfileUpdate }: any) {
+function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefreshTrigger, onNavigateToSchedules, onNavigateToGames, onNavigateToDoublePartners, onSignOut, navigationRef, onProfileUpdate }: any) {
   
   const handleNavigateToProfile = () => {
     navigationRef.current?.navigate('Profile', { 
@@ -541,6 +541,10 @@ function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefres
     navigationRef.current?.navigate('ManageDoublePartners');
   };
 
+  const handleNavigateToAccount = () => {
+    navigationRef.current?.navigate('TabNavigator', { screen: 'Account' });
+  };
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -586,6 +590,8 @@ function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefres
             onSchedulePressFromHome={onNavigateToSchedules}
             refreshTrigger={refreshTrigger}
             onSignOut={onSignOut}
+            onNavigateToAccount={handleNavigateToAccount}
+            onNavigateToDoublePartners={onNavigateToDoublePartners}
           />
         )}
       </Tab.Screen>
@@ -827,11 +833,15 @@ export default function App() {
   };
 
   const handleNavigateToSchedules = () => {
-    navigationRef.current?.navigate('TabNavigator', { screen: 'Home' });
+    navigationRef.current?.navigate('TabNavigator', { screen: 'Schedules' });
   };
 
   const handleNavigateToGames = () => {
     navigationRef.current?.navigate('TabNavigator', { screen: 'Search' });
+  };
+
+  const handleNavigateToDoublePartners = () => {
+    navigationRef.current?.navigate('ManageDoublePartners');
   };
 
   // Determine which screen to show
@@ -876,6 +886,7 @@ export default function App() {
                     gamesRefreshTrigger={gamesRefreshTrigger}
                     onNavigateToSchedules={handleNavigateToSchedules}
                     onNavigateToGames={handleNavigateToGames}
+                    onNavigateToDoublePartners={handleNavigateToDoublePartners}
                     onSignOut={handleSignOut}
                     navigationRef={navigationRef}
                     onProfileUpdate={refreshProfile}

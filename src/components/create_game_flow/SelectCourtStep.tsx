@@ -149,9 +149,10 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     flex: 1,
+    gap: 8,
   },
   listItem: {
-    marginBottom: 12,
+    // Using gap: 12 from container for consistent spacing
   },
 });
 

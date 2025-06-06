@@ -75,10 +75,9 @@ const styles = StyleSheet.create({
     marginBottom: 24, // Space between title and list items
   },
   listContainer: {
-    // Styles for the list container if needed
+    gap: 8,
   },
   listItem: {
-    marginBottom: 12,
     paddingVertical: 12,
     paddingHorizontal: 12,
     alignItems: 'center',

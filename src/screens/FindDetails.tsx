@@ -97,15 +97,39 @@ const FindDetails: React.FC<FindDetailsProps> = ({ game, user, profile, onBack, 
     
     const displayName = getDisplayName();
     const backgroundColor = game.game_type === 'singles' ? '#FFC738' : '#FF9442';
+    const title = game.game_type === 'singles' ? 'Singles with' : 'Doubles with';
     
     return {
-      title: 'Player',
+      title,
       chip: displayName,
       backgroundColor
     };
   };
 
   const playerInfo = getPlayerInfo();
+
+  // Check if notes are real user notes (not just the automatic "with partner:" placeholder)
+  const hasRealNotes = () => {
+    if (!game.notes) return false;
+    
+    // If notes only contain "with partner:" info, don't show as user notes
+    const isOnlyPartnerInfo = game.notes.match(/^with partner: .+\.?$/);
+    return !isOnlyPartnerInfo;
+  };
+
+  // Get actual user notes (excluding automatic "with partner:" info)
+  const getUserNotes = () => {
+    if (!game.notes) return '';
+    
+    // Remove "with partner:" prefix if present and return the rest
+    const withoutPartnerInfo = game.notes.replace(/with partner: .+?\.?\s*/g, '').trim();
+    return withoutPartnerInfo;
+  };
+
+  // Capitalize skill level
+  const capitalizedSkillLevel = game.skill_level 
+    ? game.skill_level.charAt(0).toUpperCase() + game.skill_level.slice(1)
+    : 'Beginner';
 
   // Get creator name for notes
   const creatorName = game.creator?.full_name || 
@@ -159,17 +183,17 @@ const FindDetails: React.FC<FindDetailsProps> = ({ game, user, profile, onBack, 
         {/* Level Section */}
         <ListItem
           title="Level"
-          chips={[game.skill_level]}
+          chips={[capitalizedSkillLevel]}
           chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
           avatarIcon={<Zap size={20} color="#000000" />}
           style={styles.listItem}
         />
 
         {/* Player Notes Section */}
-        {game.notes && (
+        {hasRealNotes() && (
           <ListItem
             title={`${creatorName} Notes`}
-            chips={[game.notes]}
+            chips={[getUserNotes()]}
             chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
             avatarIcon={<FileText size={20} color="#000000" />}
             style={styles.listItem}

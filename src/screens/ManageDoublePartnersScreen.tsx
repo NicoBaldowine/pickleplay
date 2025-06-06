@@ -144,7 +144,7 @@ const ManageDoublePartnersScreen: React.FC<ManageDoublePartnersScreenProps> = ({
 
   const renderLoadingState = () => (
     <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color="#007AFF" />
+      <ActivityIndicator size="large" color="#000000" />
       <Text style={styles.loadingText}>Loading partners...</Text>
     </View>
   );

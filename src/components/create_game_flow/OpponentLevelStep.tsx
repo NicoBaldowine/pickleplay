@@ -108,10 +108,10 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   listContainer: {
-    // Styles for the list container if needed
+    gap: 8,
   },
   listItem: {
-    marginBottom: 12,
+    // Using gap: 12 from container for consistent spacing
   },
 });
 

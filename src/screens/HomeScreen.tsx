@@ -27,11 +27,13 @@ interface HomeScreenProps {
   onSchedulePressFromHome?: (scheduleId: string) => void;
   refreshTrigger?: number;
   onSignOut?: () => void;
+  onNavigateToAccount?: () => void;
+  onNavigateToDoublePartners?: () => void;
 }
 
 const ICON_SIZE_AVATAR = 20;
 
-const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSchedules, onNavigateToGames, onSchedulePressFromHome, refreshTrigger, onSignOut }) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSchedules, onNavigateToGames, onSchedulePressFromHome, refreshTrigger, onSignOut, onNavigateToAccount, onNavigateToDoublePartners }) => {
   const [upcomingGames, setUpcomingGames] = useState<UserGame[]>([]);
   const [userSchedules, setUserSchedules] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,6 +118,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
   const handleSeeAllSchedules = () => {
     console.log('See all schedules pressed');
     onNavigateToSchedules?.();
+  };
+
+  // Task handlers for new users
+  const handleFindGamesTask = () => {
+    console.log('Find games task pressed');
+    onNavigateToGames?.();
+  };
+
+  const handleScheduleGameTask = () => {
+    console.log('Schedule game task pressed');
+    onNavigateToSchedules?.();
+  };
+
+  const handleAddPartnersTask = () => {
+    console.log('Add doubles partners task pressed');
+    onNavigateToDoublePartners?.();
   };
 
   const renderUpcomingGame = (game: UserGame, index: number) => {
@@ -279,6 +297,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
   });
   const displaySchedules = sortedSchedules.slice(0, 2);
 
+  // Determine if user is new (no schedules and no upcoming games)
+  const isNewUser = !loading && userSchedules.length === 0 && upcomingGames.length === 0;
+
+  const renderTaskItem = (title: string, iconComponent: React.ReactNode, onPress: () => void) => {
+    return (
+      <ListItem
+        title={title}
+        avatarIcon={iconComponent}
+        rightElement={<ChevronRight size={16} color="#888" />}
+        onPress={onPress}
+        style={styles.taskItem}
+      />
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}> 
       <StatusBar barStyle="dark-content" />
@@ -289,24 +322,51 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
       </View>
       <ScrollView style={styles.scrollViewContainer} contentContainerStyle={styles.scrollViewContent}>
         
-        {/* Upcoming Games Section - Only show if there are upcoming games */}
-        {!loading && displayUpcomingGames.length > 0 && (
+        {isNewUser ? (
+          // Show tasks for new users
           <>
-            {renderSectionHeader('Upcoming Games', handleSeeAllUpcoming)}
-            {displayUpcomingGames.map((game, index) => renderUpcomingGame(game, index))}
-            <View style={styles.sectionSpacing} />
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Your tasks</Text>
+            </View>
+            {renderTaskItem(
+              "Find games around you", 
+              <Search size={ICON_SIZE_AVATAR} color="#000000" />,
+              handleFindGamesTask
+            )}
+            {renderTaskItem(
+              "Schedule a game", 
+              <Calendar size={ICON_SIZE_AVATAR} color="#000000" />,
+              handleScheduleGameTask
+            )}
+            {renderTaskItem(
+              "Add Doubles Partners", 
+              <Users size={ICON_SIZE_AVATAR} color="#000000" />,
+              handleAddPartnersTask
+            )}
           </>
-        )}
-
-        {/* Schedules Section */}
-        {renderSectionHeader('Your Schedules', handleSeeAllSchedules)}
-        {displaySchedules.length > 0 ? (
-          displaySchedules.map((schedule, index) => renderSchedule(schedule, index))
         ) : (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No upcoming schedules</Text>
-            <Text style={styles.emptySubtext}>Schedules will appear here</Text>
-          </View>
+          // Show regular sections for users with content
+          <>
+            {/* Upcoming Games Section - Only show if there are upcoming games */}
+            {!loading && displayUpcomingGames.length > 0 && (
+              <>
+                {renderSectionHeader('Upcoming Games', handleSeeAllUpcoming)}
+                {displayUpcomingGames.map((game, index) => renderUpcomingGame(game, index))}
+                <View style={styles.sectionSpacing} />
+              </>
+            )}
+
+            {/* Schedules Section */}
+            {renderSectionHeader('Your Schedules', handleSeeAllSchedules)}
+            {displaySchedules.length > 0 ? (
+              displaySchedules.map((schedule, index) => renderSchedule(schedule, index))
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No upcoming schedules</Text>
+                <Text style={styles.emptySubtext}>Schedules will appear here</Text>
+              </View>
+            )}
+          </>
         )}
 
       </ScrollView>
@@ -367,7 +427,7 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   listItem: {
-    marginBottom: 8,
+    // Using consistent spacing with other list items
   },
   avatarContainer: {
     width: 40,
@@ -407,6 +467,14 @@ const styles = StyleSheet.create({
   },
   sectionSpacing: {
     height: 16,
+  },
+  taskItem: {
+    marginBottom: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 60,
   },
 });
 

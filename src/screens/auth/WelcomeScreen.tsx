@@ -91,8 +91,8 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSignUp, onLogin }) => {
           </View>
         </View>
 
-        {/* Buttons */}
-        <View style={styles.buttonSection}>
+        {/* Buttons - Positioned like SignUpScreen */}
+        <View style={styles.buttonContainer}>
           <TouchableOpacity style={styles.createAccountButton} onPress={onSignUp}>
             <Text style={styles.createAccountButtonText}>Create an account</Text>
           </TouchableOpacity>
@@ -114,7 +114,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 16,
-    justifyContent: 'space-between',
   },
   clearSessionContainer: {
     position: 'absolute',
@@ -137,21 +136,21 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingTop: 60,
-    paddingBottom: 100,
+    paddingBottom: 200, // More space to push buttons lower
   },
   titleSection: {
-    marginBottom: 32,
+    marginBottom: 24, // 24px space to description
   },
   mainTitle: {
-    fontSize: 40,
+    fontSize: 48,
     fontFamily: 'InterTight-ExtraBold',
     fontWeight: '800',
     color: COLORS.TEXT_PRIMARY,
-    lineHeight: 48,
-    marginBottom: 8,
+    lineHeight: 48, // 100% line height
+    marginBottom: 0,
   },
   subtitleSection: {
-    paddingHorizontal: 8,
+    // Remove paddingHorizontal to align with buttons (16px)
   },
   subtitle: {
     fontSize: 18,
@@ -161,10 +160,16 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     textAlign: 'left',
   },
-  buttonSection: {
-    paddingBottom: 48,
+  buttonContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingBottom: 20,
     gap: 12,
-    paddingHorizontal: 0,
   },
   createAccountButton: {
     backgroundColor: COLORS.TEXT_PRIMARY,

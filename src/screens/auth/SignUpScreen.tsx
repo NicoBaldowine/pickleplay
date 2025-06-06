@@ -177,11 +177,6 @@ const SignUpScreen: React.FC<SignUpScreenProps> = memo(({
                 </TouchableOpacity>
               </View>
             </View>
-
-            {/* Forgot Password */}
-            <TouchableOpacity style={styles.forgotPasswordContainer}>
-              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-            </TouchableOpacity>
           </View>
         </ScrollView>
 
@@ -257,8 +252,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    fontFamily: 'InterTight-ExtraBold',
-    fontWeight: '800',
     color: '#333',
     borderWidth: 2,
     borderColor: '#E0E0E0',
@@ -274,16 +267,6 @@ const styles = StyleSheet.create({
     right: 16,
     top: '50%',
     transform: [{ translateY: -10 }], // Half of icon size
-  },
-  forgotPasswordContainer: {
-    alignItems: 'flex-end',
-    marginTop: -8,
-  },
-  forgotPasswordText: {
-    fontSize: 14,
-    fontFamily: 'InterTight-ExtraBold',
-    fontWeight: '800',
-    color: COLORS.TEXT_SECONDARY,
   },
   buttonContainer: {
     position: 'absolute',

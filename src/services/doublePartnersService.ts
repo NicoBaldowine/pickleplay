@@ -52,7 +52,7 @@ class DoublePartnersService {
   }
 
   /**
-   * Create a new partner
+   * Create a new partner - with automatic session refresh on JWT expiry
    */
   async createPartner(userId: string, partnerData: CreatePartnerData): Promise<{ success: boolean; partnerId?: string; error?: string }> {
     try {
@@ -68,10 +68,45 @@ class DoublePartnersService {
         is_registered: false, // For now, partners are not registered by default
       };
 
+      // First attempt
       const { data, error } = await supabaseClient.from(this.tableName).insert(insertData);
 
       if (error) {
         console.error('Error creating partner:', error);
+        
+        // Check for JWT expired errors specifically
+        if (error.code === 'PGRST301' || error.message?.includes('JWT expired') || error.message?.includes('Session expired')) {
+          console.log('🔄 JWT expired, attempting to refresh session...');
+          
+          // Try to refresh session
+          const refreshResult = await authService.refreshSession();
+          if (refreshResult.success) {
+            console.log('✅ Session refreshed, retrying create...');
+            
+            // Retry the create with fresh token
+            const { data: retryData, error: retryError } = await supabaseClient.from(this.tableName).insert(insertData);
+            
+            if (retryError) {
+              console.error('Error creating partner after refresh:', retryError);
+              if (retryError.code === '23505') {
+                return { success: false, error: 'You already have a partner with this name' };
+              }
+              return { success: false, error: retryError.message || 'Failed to create partner after refresh' };
+            }
+            
+            if (!retryData || (Array.isArray(retryData) && retryData.length === 0)) {
+              return { success: false, error: 'No data returned after insert with refresh' };
+            }
+
+            const partner = Array.isArray(retryData) ? retryData[0] : retryData;
+            console.log('✅ Partner created successfully after session refresh:', partner.id);
+            return { success: true, partnerId: partner.id };
+          } else {
+            console.log('❌ Session refresh failed:', refreshResult.error);
+            return { success: false, error: 'Session expired and could not be refreshed. Please log in again.' };
+          }
+        }
+        
         if (error.code === '23505') {
           return { success: false, error: 'You already have a partner with this name' };
         }
@@ -86,8 +121,52 @@ class DoublePartnersService {
       console.log('✅ Partner created successfully:', partner.id);
       return { success: true, partnerId: partner.id };
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('💥 Error creating partner:', error);
+      
+      // Check for JWT expired in catch block too
+      if (error && 
+          (error.code === 'PGRST301' || error.message?.includes('JWT expired'))) {
+        console.log('🔄 JWT expired in catch block, attempting to refresh session...');
+        
+        try {
+          const refreshResult = await authService.refreshSession();
+          if (refreshResult.success) {
+            console.log('✅ Session refreshed in catch block, retrying create...');
+            
+            // Retry the create
+            const insertData = {
+              user_id: userId,
+              partner_name: partnerData.partner_name,
+              partner_level: partnerData.partner_level,
+              partner_email: partnerData.partner_email,
+              partner_phone: partnerData.partner_phone,
+              is_registered: false,
+            };
+            
+            const { data: retryData, error: retryError } = await supabaseClient.from(this.tableName).insert(insertData);
+            
+            if (retryError) {
+              if (retryError.code === '23505') {
+                return { success: false, error: 'You already have a partner with this name' };
+              }
+              return { success: false, error: retryError.message || 'Failed to create partner after refresh' };
+            }
+            
+            if (!retryData || (Array.isArray(retryData) && retryData.length === 0)) {
+              return { success: false, error: 'No data returned after insert with refresh' };
+            }
+
+            const partner = Array.isArray(retryData) ? retryData[0] : retryData;
+            return { success: true, partnerId: partner.id };
+          } else {
+            return { success: false, error: 'Session expired and could not be refreshed. Please log in again.' };
+          }
+        } catch (refreshError) {
+          return { success: false, error: 'Session expired and refresh failed. Please log in again.' };
+        }
+      }
+      
       const message = error instanceof Error ? error.message : 'An unexpected error occurred';
       return { success: false, error: message };
     }

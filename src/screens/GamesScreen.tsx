@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, StatusBar, ActivityIndicator, RefreshControl, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, StatusBar, ActivityIndicator, RefreshControl, Image, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { User, Users, Info, ChevronRight } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -26,11 +26,12 @@ const ICON_COLOR_CHEVRON = '#888';
 const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
   const [userGames, setUserGames] = useState<UserGame[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigation = useNavigation();
 
   useEffect(() => {
-    loadUserGames();
+    loadInitialData();
   }, []);
 
   // Add effect to reload when refreshTrigger changes
@@ -40,7 +41,7 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
     }
   }, [refreshTrigger]);
 
-  const loadUserGames = async () => {
+  const loadInitialData = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -57,6 +58,26 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
       setError('Failed to load games');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadUserGames = async () => {
+    try {
+      setRefreshing(true);
+      setError(null);
+      
+      // Get current user
+      const currentUser = await authService.getCurrentUser();
+      if (currentUser) {
+        // Fetch user's games
+        const games = await gameService.getUserGames(currentUser.id);
+        setUserGames(games);
+      }
+    } catch (err) {
+      console.error('Error loading user games:', err);
+      setError('Failed to load games');
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -214,19 +235,34 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyStateContainer}>
-      <View style={styles.emptyIconContainer}>
-        <Users size={48} color="#CCC" />
-      </View>
+      <Image
+        source={require('../../assets/images/empty2.png')}
+        style={styles.emptyStateImage}
+        resizeMode="contain"
+      />
       <Text style={styles.emptyStateTitle}>No games yet</Text>
-      <Text style={styles.emptyStateDescription}>
-        You haven't accepted any games yet. Go to Find to discover games!
-      </Text>
+      
+      <View style={styles.emptyButtonsContainer}>
+        <TouchableOpacity 
+          style={styles.primaryButton} 
+          onPress={() => (navigation as any).navigate('Search')}
+        >
+          <Text style={styles.primaryButtonText}>Find</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.secondaryButton} 
+          onPress={() => (navigation as any).navigate('Schedules')}
+        >
+          <Text style={styles.secondaryButtonText}>Schedule</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
   const renderLoadingState = () => (
     <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color="#007AFF" />
+      <ActivityIndicator size="large" color="#000000" />
       <Text style={styles.loadingText}>Loading your games...</Text>
     </View>
   );
@@ -246,18 +282,22 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}>
       <StatusBar barStyle="dark-content" />
-      <View style={styles.headerContainer}>
-        <Text style={styles.title}>My Games</Text>
-        <Text style={styles.subtitle}>Upcoming and past games</Text>
-      </View>
+      {/* Only show header when there are games */}
+      {userGames.length > 0 && (
+        <View style={styles.headerContainer}>
+          <Text style={styles.title}>My Games</Text>
+          <Text style={styles.subtitle}>Upcoming and past games</Text>
+        </View>
+      )}
       <ScrollView 
         style={styles.scrollViewContainer} 
         contentContainerStyle={styles.scrollViewContent}
         refreshControl={
           <RefreshControl
-            refreshing={loading}
+            refreshing={refreshing}
             onRefresh={loadUserGames}
-            tintColor="#007AFF"
+            tintColor="#000000"
+            colors={['#000000']}
           />
         }
       >
@@ -344,9 +384,9 @@ const styles = StyleSheet.create({
   },
   gamesListContainer: {
     marginBottom: 16,
+    gap: 8,
   },
   listItem: {
-    marginBottom: 8,
   },
   avatarContainer: {
     width: 40,
@@ -376,9 +416,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
     textAlign: 'center',
     marginBottom: 8,
   },
@@ -398,6 +439,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#888',
     marginTop: 12,
+  },
+  emptyStateImage: {
+    width: 300,
+    height: 300,
+    marginBottom: 8,
+  },
+  emptyButtonsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 24,
+    justifyContent: 'center',
+  },
+  primaryButton: {
+    backgroundColor: '#000000',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  secondaryButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.07)',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+  },
+  secondaryButtonText: {
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#000000',
+    textAlign: 'center',
   },
 });
 

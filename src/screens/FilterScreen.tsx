@@ -13,12 +13,14 @@ export interface GameFilters {
   gameTypes: {
     singles: boolean;
     doubles: boolean;
+    all: boolean;
   };
   skillLevels: {
     beginner: boolean;
     intermediate: boolean;
     advanced: boolean;
     expert: boolean;
+    all: boolean;
   };
   radius: number; // in miles
 }
@@ -39,24 +41,87 @@ const RADIUS_OPTIONS = [
 const FilterScreen: React.FC<FilterScreenProps> = ({ filters: initialFilters, onBack, onApplyFilters }) => {
   const [filters, setFilters] = useState<GameFilters>(initialFilters);
 
-  const handleGameTypeToggle = (type: 'singles' | 'doubles') => {
-    setFilters(prev => ({
-      ...prev,
-      gameTypes: {
-        ...prev.gameTypes,
-        [type]: !prev.gameTypes[type]
-      }
-    }));
+  const handleGameTypeToggle = (type: 'singles' | 'doubles' | 'all') => {
+    if (type === 'all') {
+      // Select All, deselect singles and doubles individually
+      setFilters(prev => ({
+        ...prev,
+        gameTypes: {
+          singles: true, // All means both are enabled
+          doubles: true,
+          all: true
+        }
+      }));
+    } else {
+      // Select individual type, deselect All
+      setFilters(prev => ({
+        ...prev,
+        gameTypes: {
+          singles: type === 'singles',
+          doubles: type === 'doubles',
+          all: false
+        }
+      }));
+    }
   };
 
   const handleSkillLevelToggle = (level: keyof GameFilters['skillLevels']) => {
-    setFilters(prev => ({
-      ...prev,
-      skillLevels: {
-        ...prev.skillLevels,
-        [level]: !prev.skillLevels[level]
+    if (level === 'all') {
+      // Toggle All - if All is currently selected, deselect everything, otherwise select all
+      const isAllCurrentlySelected = filters.skillLevels.all;
+      setFilters(prev => ({
+        ...prev,
+        skillLevels: {
+          beginner: !isAllCurrentlySelected,
+          intermediate: !isAllCurrentlySelected,
+          advanced: !isAllCurrentlySelected,
+          expert: !isAllCurrentlySelected,
+          all: !isAllCurrentlySelected
+        }
+      }));
+    } else {
+      // Handle individual skill level selection
+      if (filters.skillLevels.all) {
+        // If "All" is currently selected, deselect "All" and activate ONLY the level clicked
+        setFilters(prev => ({
+          ...prev,
+          skillLevels: {
+            beginner: level === 'beginner',
+            intermediate: level === 'intermediate', 
+            advanced: level === 'advanced',
+            expert: level === 'expert',
+            all: false
+          }
+        }));
+      } else {
+        // Normal toggle behavior when "All" is not selected
+        const newSkillLevels = {
+          ...filters.skillLevels,
+          [level]: !filters.skillLevels[level],
+          all: false
+        };
+        
+        // Check if all individual levels are now selected
+        const individualLevels = ['beginner', 'intermediate', 'advanced', 'expert'] as const;
+        const allIndividualSelected = individualLevels.every(lvl => 
+          lvl === level ? !filters.skillLevels[level] : filters.skillLevels[lvl]
+        );
+        
+        if (allIndividualSelected) {
+          // If all 4 individual levels are selected, activate "All" instead
+          newSkillLevels.beginner = true;
+          newSkillLevels.intermediate = true;
+          newSkillLevels.advanced = true;
+          newSkillLevels.expert = true;
+          newSkillLevels.all = true;
+        }
+        
+        setFilters(prev => ({
+          ...prev,
+          skillLevels: newSkillLevels
+        }));
       }
-    }));
+    }
   };
 
   const handleRadiusSelect = (radius: number) => {
@@ -117,13 +182,18 @@ const FilterScreen: React.FC<FilterScreenProps> = ({ filters: initialFilters, on
           <View style={styles.chipsContainer}>
             {renderChip(
               'Singles',
-              filters.gameTypes.singles,
+              filters.gameTypes.singles && !filters.gameTypes.all,
               () => handleGameTypeToggle('singles')
             )}
             {renderChip(
               'Doubles',
-              filters.gameTypes.doubles,
+              filters.gameTypes.doubles && !filters.gameTypes.all,
               () => handleGameTypeToggle('doubles')
+            )}
+            {renderChip(
+              'All',
+              filters.gameTypes.all,
+              () => handleGameTypeToggle('all')
             )}
           </View>
         ))}
@@ -133,23 +203,28 @@ const FilterScreen: React.FC<FilterScreenProps> = ({ filters: initialFilters, on
           <View style={styles.chipsContainer}>
             {renderChip(
               'Beginner',
-              filters.skillLevels.beginner,
+              filters.skillLevels.beginner && !filters.skillLevels.all,
               () => handleSkillLevelToggle('beginner')
             )}
             {renderChip(
               'Intermediate',
-              filters.skillLevels.intermediate,
+              filters.skillLevels.intermediate && !filters.skillLevels.all,
               () => handleSkillLevelToggle('intermediate')
             )}
             {renderChip(
               'Advanced',
-              filters.skillLevels.advanced,
+              filters.skillLevels.advanced && !filters.skillLevels.all,
               () => handleSkillLevelToggle('advanced')
             )}
             {renderChip(
               'Expert',
-              filters.skillLevels.expert,
+              filters.skillLevels.expert && !filters.skillLevels.all,
               () => handleSkillLevelToggle('expert')
+            )}
+            {renderChip(
+              'All',
+              filters.skillLevels.all,
+              () => handleSkillLevelToggle('all')
             )}
           </View>
         ))}

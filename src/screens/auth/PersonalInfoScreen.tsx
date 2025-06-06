@@ -140,17 +140,11 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
             <Text style={styles.mainTitle}>
               {isCompletingRegistration ? 'Complete Your Profile' : 'Create an account'}
             </Text>
-            
-            {isCompletingRegistration && (
-              <Text style={styles.subtitle}>
-                Please complete your profile to start using the app
-              </Text>
-            )}
           </View>
 
           {/* Name Input */}
           <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>Email</Text>
+            <Text style={styles.inputLabel}>First Name</Text>
             <TextInput
               ref={nameInputRef}
               style={styles.inputField}
@@ -158,7 +152,7 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
               placeholderTextColor="#999"
               value={name}
               onChangeText={setName}
-              autoCapitalize="none"
+              autoCapitalize="words"
               returnKeyType="next"
               editable={!isLoading}
               onSubmitEditing={handleNameSubmit}
@@ -170,7 +164,7 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
 
           {/* Last Name Input */}
           <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>Password</Text>
+            <Text style={styles.inputLabel}>Last Name</Text>
             <TextInput
               ref={lastnameInputRef}
               style={styles.inputField}
@@ -178,7 +172,7 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
               placeholderTextColor="#999"
               value={lastname}
               onChangeText={setLastname}
-              secureTextEntry
+              autoCapitalize="words"
               returnKeyType="done"
               editable={!isLoading}
               onSubmitEditing={handleLastnameSubmit}
@@ -186,6 +180,23 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
                 console.log('🎯 Last name input focused successfully');
               }}
             />
+          </View>
+
+          {/* Level Dropdown */}
+          <View style={styles.inputSection}>
+            <Text style={styles.inputLabel}>Skill Level</Text>
+            <TouchableOpacity 
+              style={styles.dropdownButton}
+              onPress={() => setShowLevelDropdown(true)}
+            >
+              <Text style={[
+                styles.dropdownText, 
+                selectedLevel === '' && styles.placeholderText
+              ]}>
+                {getSelectedLevelLabel()}
+              </Text>
+              <ChevronDown size={18} color="#888" />
+            </TouchableOpacity>
           </View>
         </ScrollView>
 
@@ -255,7 +266,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   scrollContentContainer: {
-    paddingBottom: 20,
+    paddingBottom: 120,
     paddingTop: 20,
     flexGrow: 1,
   },
@@ -269,13 +280,6 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT_PRIMARY,
     marginBottom: 8,
   },
-  subtitle: {
-    fontSize: 16,
-    fontFamily: 'InterTight-ExtraBold',
-    fontWeight: '800',
-    color: COLORS.TEXT_SECONDARY,
-    lineHeight: 22,
-  },
   inputSection: {
     marginBottom: 24,
   },
@@ -287,40 +291,42 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   inputField: {
-    backgroundColor: COLORS.BACKGROUND_SECONDARY,
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     fontSize: 16,
-    fontFamily: 'InterTight-ExtraBold',
-    fontWeight: '800',
-    color: COLORS.TEXT_PRIMARY,
-    borderWidth: 1,
-    borderColor: 'transparent',
+    color: '#333',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
   },
   dropdownButton: {
-    backgroundColor: COLORS.BACKGROUND_SECONDARY,
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderWidth: 1,
-    borderColor: 'transparent',
+    paddingVertical: 12,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   dropdownText: {
     fontSize: 16,
-    fontFamily: 'InterTight-ExtraBold',
-    fontWeight: '800',
-    color: COLORS.TEXT_PRIMARY,
+    color: '#333',
   },
   placeholderText: {
-    color: COLORS.TEXT_SECONDARY,
+    color: '#999',
   },
   buttonContainer: {
-    padding: 16,
-    paddingBottom: Platform.OS === 'ios' ? 48 : 16,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingBottom: 16,
   },
   continueButton: {
     backgroundColor: COLORS.TEXT_PRIMARY,
@@ -336,7 +342,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'InterTight-ExtraBold',
     fontWeight: '800',
-    color: COLORS.BACKGROUND_PRIMARY,
+    color: '#FFFFFF',
   },
   continueButtonTextDisabled: {
     opacity: 0.7,

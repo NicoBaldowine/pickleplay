@@ -241,9 +241,9 @@ const AvatarScreen: React.FC<AvatarScreenProps> = ({ onBack, onAvatarComplete, u
   };
 
   const handleCreateAccount = async () => {
-    if (selectedImage) {
-      setIsCreatingAccount(true);
-      try {
+    setIsCreatingAccount(true);
+    try {
+      if (selectedImage) {
         console.log('🖼️ Uploading avatar before creating profile...');
         
         // Upload image to Supabase Storage first
@@ -271,12 +271,15 @@ const AvatarScreen: React.FC<AvatarScreenProps> = ({ onBack, onAvatarComplete, u
             ]
           );
         }
-      } catch (error) {
-        console.error('Error creating account:', error);
-        Alert.alert('Error', 'Failed to create account. Please try again.');
-      } finally {
-        setIsCreatingAccount(false);
+      } else {
+        console.log('📝 No image selected, creating account without avatar...');
+        await onAvatarComplete('');
       }
+    } catch (error) {
+      console.error('Error creating account:', error);
+      Alert.alert('Error', 'Failed to create account. Please try again.');
+    } finally {
+      setIsCreatingAccount(false);
     }
   };
 
@@ -314,7 +317,6 @@ const AvatarScreen: React.FC<AvatarScreenProps> = ({ onBack, onAvatarComplete, u
             ) : (
               <View style={styles.avatarPlaceholder}>
                 <Camera size={40} color={COLORS.TEXT_PRIMARY} />
-                <Text style={styles.placeholderText}>Add Photo</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -343,7 +345,7 @@ const AvatarScreen: React.FC<AvatarScreenProps> = ({ onBack, onAvatarComplete, u
             </View>
           ) : (
             <Text style={styles.createButtonText}>
-              {selectedImage ? 'Create account' : 'Skip photo & Create account'}
+              Create account
             </Text>
           )}
         </TouchableOpacity>
@@ -425,9 +427,6 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     padding: 16,
-    backgroundColor: COLORS.BACKGROUND_SECONDARY,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.BORDER_LIGHT,
   },
   createButton: {
     backgroundColor: '#000000',

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, TouchableWithoutFeedback, Keyboard, StatusBar, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, TouchableWithoutFeedback, Keyboard, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native';
+import { COLORS } from '../../constants/colors';
+import TopBar from '../../components/ui/TopBar';
 
 interface LoginScreenProps {
   onBack: () => void;
@@ -14,13 +16,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLogin, onForgotPass
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [lastError, setLastError] = useState('');
 
   const isFormValid = email.trim().length > 0 && password.length >= 6;
 
   const handleLogin = () => {
     if (isFormValid) {
-      setLastError(''); // Clear previous errors
       onLogin(email.trim(), password);
     }
   };
@@ -35,11 +35,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLogin, onForgotPass
         <StatusBar barStyle="dark-content" />
         
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <ArrowLeft size={24} color="#333" />
-          </TouchableOpacity>
-        </View>
+        <TopBar
+          title=""
+          leftIcon={<ArrowLeft size={24} color={COLORS.TEXT_PRIMARY} />}
+          onLeftIconPress={onBack}
+          style={styles.topBar}
+        />
 
         <ScrollView 
           style={styles.scrollContent} 
@@ -49,7 +50,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLogin, onForgotPass
           {/* Title Section */}
           <View style={styles.titleSection}>
             <Text style={styles.title}>Welcome back</Text>
-            <Text style={styles.subtitle}>Sign in to your account</Text>
           </View>
 
           {/* Form Section */}
@@ -60,8 +60,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLogin, onForgotPass
                 style={styles.textInput}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="Enter your email"
-                placeholderTextColor="#999"
+                placeholder=""
+                placeholderTextColor={COLORS.TEXT_SECONDARY}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -70,40 +70,35 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLogin, onForgotPass
 
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Password</Text>
-              <View style={styles.passwordContainer}>
+              <View style={styles.passwordInputContainer}>
                 <TextInput
                   style={[styles.textInput, styles.passwordInput]}
                   value={password}
                   onChangeText={setPassword}
-                  placeholder="Enter your password"
-                  placeholderTextColor="#999"
+                  placeholder=""
+                  placeholderTextColor={COLORS.TEXT_SECONDARY}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
                 <TouchableOpacity 
+                  style={styles.eyeButton} 
                   onPress={togglePasswordVisibility}
-                  style={styles.eyeButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   {showPassword ? (
-                    <EyeOff size={20} color="#888" />
+                    <EyeOff size={20} color={COLORS.TEXT_SECONDARY} />
                   ) : (
-                    <Eye size={20} color="#888" />
+                    <Eye size={20} color={COLORS.TEXT_SECONDARY} />
                   )}
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Forgot Password Link */}
+            {/* Forgot Password */}
             {onForgotPassword && (
-              <TouchableOpacity 
-                onPress={() => {
-                  console.log('🔑 Forgot password pressed');
-                  onForgotPassword(email);
-                }}
-                style={styles.forgotPasswordButton}
-              >
-                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              <TouchableOpacity style={styles.forgotPasswordContainer} onPress={() => onForgotPassword(email)}>
+                <Text style={styles.forgotPasswordText}>Forgot password?</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -112,13 +107,23 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLogin, onForgotPass
         {/* Bottom Button */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity 
-            style={[styles.loginButton, (!isFormValid || isLoading) && styles.disabledButton]} 
+            style={[
+              styles.loginButton, 
+              (!isFormValid || isLoading) && styles.disabledButton
+            ]} 
             onPress={handleLogin}
             disabled={!isFormValid || isLoading}
           >
-            <Text style={[styles.loginButtonText, (!isFormValid || isLoading) && styles.disabledButtonText]}>
-              {isLoading ? "Signing in..." : "Log In"}
-            </Text>
+            {isLoading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={[
+                styles.loginButtonText, 
+                (!isFormValid || isLoading) && styles.disabledButtonText
+              ]}>
+                Log In
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -129,108 +134,99 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLogin, onForgotPass
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 10,
-  },
-  backButton: {
-    padding: 8,
-    alignSelf: 'flex-start',
+  topBar: {
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     flex: 1,
   },
   scrollContentContainer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    paddingTop: 20,
     paddingBottom: 120, // Space for fixed button
   },
   titleSection: {
-    marginBottom: 40,
+    marginBottom: 32,
   },
   title: {
-    fontSize: 34,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    lineHeight: 22,
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
   },
   formSection: {
-    marginBottom: 30,
+    gap: 24,
   },
   inputContainer: {
-    marginBottom: 20,
+    gap: 8,
   },
   inputLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
   },
   textInput: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     fontSize: 16,
     color: '#333',
-    borderWidth: 1,
-    borderColor: '#E5E5E7',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
   },
-  passwordContainer: {
+  passwordInputContainer: {
     position: 'relative',
   },
   passwordInput: {
-    paddingRight: 50,
+    paddingRight: 50, // Make room for the eye icon
   },
   eyeButton: {
     position: 'absolute',
     right: 16,
-    top: 16,
-    padding: 4,
+    top: '50%',
+    transform: [{ translateY: -10 }], // Half of icon size
+  },
+  forgotPasswordContainer: {
+    alignItems: 'flex-end',
+    marginTop: -8,
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_SECONDARY,
   },
   buttonContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FEF2D6',
-    paddingHorizontal: 20,
-    paddingVertical: 30,
-    paddingBottom: 40,
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingBottom: 48,
   },
   loginButton: {
-    backgroundColor: '#000000',
-    borderRadius: 12,
+    backgroundColor: COLORS.TEXT_PRIMARY,
+    borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
   },
   disabledButton: {
-    backgroundColor: '#E5E5E7',
+    opacity: 0.5,
   },
   loginButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   disabledButtonText: {
-    color: '#999',
-  },
-  forgotPasswordButton: {
-    alignSelf: 'flex-end',
-    marginTop: 8,
-    paddingVertical: 4,
-  },
-  forgotPasswordText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '600',
+    opacity: 0.7,
   },
 });
 

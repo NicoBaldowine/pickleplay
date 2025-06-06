@@ -102,7 +102,7 @@ const SportSelectionScreen: React.FC<SportSelectionScreenProps> = ({ onBack, onS
                 style={StyleSheet.flatten([
                   styles.listItem,
                   !isAvailable && styles.listItemDisabled,
-                  isSelected && styles.listItemSelected
+                  isSelected && sport.id !== 'pickleball' && styles.listItemSelected
                 ])}
               />
             );
@@ -139,7 +139,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   listItem: {
-    marginBottom: 8,
     height: 60,
     paddingVertical: 12,
     paddingHorizontal: 12,
