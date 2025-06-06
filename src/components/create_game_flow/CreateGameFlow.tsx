@@ -3,6 +3,7 @@ import { View, Alert, ActivityIndicator, StyleSheet, Text, StatusBar } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { gameService } from '../../services/gameService';
 import { authService } from '../../services/authService';
+import { courtsService, Court } from '../../services/courtsService';
 import TypeOfGameStep from './TypeOfGameStep';
 import DoublesStep from './DoublesStep';
 import CreatePartnerStep from './CreatePartnerStep';
@@ -17,12 +18,6 @@ import { COLORS } from '../../constants/colors';
 // Define types for the create game flow
 export type GameType = 'singles' | 'doubles';
 export type PlayerLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
-export interface Court { 
-  id: string; 
-  name: string; 
-  distance?: string;
-  address?: string;
-}
 export interface CreateGameData {
     game_type: GameType;
     court_id: string;
@@ -56,16 +51,23 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
   });
 
   useEffect(() => {
-    // Provide some courts for SelectCourtStep to render
-    // In a real app, this would fetch from a courts API
-    setCourts([
-        { id: 'court_city_park', name: 'City Park Tennis Center', distance: '0.8 miles', address: '2800 E 26th Ave, Denver, CO' },
-        { id: 'court_washington_park', name: 'Washington Park Recreation Center', distance: '1.4 miles', address: '701 S Franklin St, Denver, CO' },
-        { id: 'court_congress_park', name: 'Congress Park Courts', distance: '2.2 miles', address: '1100 Josephine St, Denver, CO' },
-        { id: 'court_stapleton', name: 'Stapleton Community Courts', distance: '3.1 miles', address: '2823 Roslyn St, Denver, CO' },
-        { id: 'court_highlands', name: 'Highlands Recreation Center', distance: '2.8 miles', address: '2880 Lowell Blvd, Denver, CO' },
-    ]);
+    // Load courts from Supabase
+    loadCourts();
   }, []);
+
+  const loadCourts = async () => {
+    try {
+      setIsFetchingCourts(true);
+      const courtsData = await courtsService.getCourtsByCity('Denver');
+      setCourts(courtsData);
+    } catch (error) {
+      console.error('Error loading courts:', error);
+      Alert.alert('Error', 'Failed to load courts. Please try again.');
+      setCourts([]); // Set empty array on error
+    } finally {
+      setIsFetchingCourts(false);
+    }
+  };
 
   const handleNextStep = () => {
     console.log('🔄 Moving to next step from:', step);

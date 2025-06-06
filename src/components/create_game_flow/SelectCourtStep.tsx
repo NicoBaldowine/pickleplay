@@ -4,7 +4,7 @@ import { ArrowLeft, X, MapPin, ChevronRight } from 'lucide-react-native';
 import ListItem from '../ui/ListItem';
 import { globalTextStyles } from '../../styles/globalStyles';
 import { COLORS } from '../../constants/colors';
-import { Court } from './CreateGameFlow';
+import { Court } from '../../services/courtsService';
 
 interface SelectCourtStepProps {
   courts: Court[];
@@ -63,12 +63,11 @@ const SelectCourtStep: React.FC<SelectCourtStepProps> = ({
 
       <ScrollView style={styles.listContainer}>
         {courts.map((court) => {
-          // Determine if court is free or paid based on name (this would come from API in real app)
-          const isPaid = court.name.toLowerCase().includes('elite') || court.name.toLowerCase().includes('club');
-          const paymentStatus = isPaid ? 'Paid' : 'Free';
+          // Use real payment status from database
+          const paymentStatus = court.is_free ? 'Free' : 'Paid';
           
           const chips = [
-            court.distance || 'Distance TBD',
+            court.distance || 'Distance TBD', // Will be calculated later with geolocation
             paymentStatus
           ];
           
