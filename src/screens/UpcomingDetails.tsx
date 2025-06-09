@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Text, StatusBar, TouchableOpacity, Alert, Image, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, User, Clock, MapPin, Zap, FileText } from 'lucide-react-native';
@@ -12,6 +12,8 @@ import { COLORS } from '../constants/colors';
 
 // Import game service and types
 import { UserGame, gameService } from '../services/gameService';
+import { authService } from '../services/authService';
+import { supabaseClient } from '../lib/supabase';
 
 interface UpcomingDetailsProps {
   game: UserGame;
@@ -20,7 +22,57 @@ interface UpcomingDetailsProps {
 }
 
 const UpcomingDetails: React.FC<UpcomingDetailsProps> = ({ game, onBack, onCancelGame }) => {
+  const [userPartnerName, setUserPartnerName] = useState<string | null>(null);
+  const [loadingPartner, setLoadingPartner] = useState(false);
+
   const formattedDateTime = gameService.formatGameDateTime(game.date, game.time);
+
+  // Load user's partner info for doubles games
+  useEffect(() => {
+    if (game.game_type === 'doubles') {
+      loadUserPartner();
+    }
+  }, [game.game_type, game.id]);
+
+  const loadUserPartner = async () => {
+    try {
+      setLoadingPartner(true);
+      
+      // Get current user
+      const currentUser = await authService.getCurrentUser();
+      if (!currentUser?.id) {
+        console.log('No current user found');
+        return;
+      }
+
+      // Query game_users table to find current user's record for this game
+      const gameUserResult = await supabaseClient.query('game_users', {
+        select: 'partner_name, partner_id',
+        filters: { 
+          game_id: game.id,
+          user_id: currentUser.id 
+        },
+        single: true
+      });
+
+      if (gameUserResult.error) {
+        console.log('Error fetching user partner info:', gameUserResult.error);
+        return;
+      }
+
+      if (gameUserResult.data?.partner_name) {
+        setUserPartnerName(gameUserResult.data.partner_name);
+        console.log('✅ Found user partner:', gameUserResult.data.partner_name);
+      } else {
+        console.log('No partner info found for user in this game');
+      }
+
+    } catch (error) {
+      console.error('Error loading user partner:', error);
+    } finally {
+      setLoadingPartner(false);
+    }
+  };
 
   // Placeholder images for profile pictures (fallback)
   const playerImages = [
@@ -50,16 +102,31 @@ const UpcomingDetails: React.FC<UpcomingDetailsProps> = ({ game, onBack, onCance
     );
   };
 
-  // Get opponent information
+  // Get opponent information with correct avatar logic
   const getOpponentInfo = () => {
     if (game.creator) {
       const creatorName = game.creator.full_name || 
                          `${game.creator.first_name || ''} ${game.creator.last_name || ''}`.trim() || 
                          'Unknown Player';
       
-      const opponentImage = game.creator.avatar_url || playerImages[0];
+      // For doubles games, use the same avatar logic as other screens
+      let opponentImage = game.creator.avatar_url || playerImages[0];
+      if (game.game_type === 'doubles') {
+        // Type assertion to access creator_partner from original_game
+        const originalGameWithDetails = game.original_game as any;
+        if (originalGameWithDetails?.creator_partner?.avatar_url) {
+          console.log(`🖼️ UpcomingDetails: Using creator partner avatar for doubles game ${game.id}:`, originalGameWithDetails.creator_partner.avatar_url);
+          opponentImage = originalGameWithDetails.creator_partner.avatar_url;
+        } else if (game.creator.avatar_url) {
+          console.log(`👤 UpcomingDetails: Using creator avatar fallback for doubles game ${game.id}:`, game.creator.avatar_url);
+          opponentImage = game.creator.avatar_url;
+        } else {
+          console.log(`⚠️ UpcomingDetails: No creator partner/creator avatar found for doubles game ${game.id}, using placeholder`);
+          opponentImage = playerImages[0];
+        }
+      }
       
-      // For doubles games, show both players like in SearchScreen
+      // For doubles games, show both players like in other screens
       if (game.game_type === 'doubles') {
         // Check if partner info is in notes
         if (game.original_game?.notes && game.original_game.notes.includes('with partner:')) {
@@ -84,7 +151,7 @@ const UpcomingDetails: React.FC<UpcomingDetailsProps> = ({ game, onBack, onCance
         };
       }
       
-      // For singles games, show creator name
+      // For singles games, show creator name and avatar
       return {
         name: creatorName,
         imageUrl: opponentImage
@@ -197,16 +264,40 @@ const UpcomingDetails: React.FC<UpcomingDetailsProps> = ({ game, onBack, onCance
           style={styles.listItem}
         />
 
-        {/* Notes Section */}
-        {game.original_game?.notes && (
+        {/* Your Partner Section - Only for doubles games */}
+        {game.game_type === 'doubles' && userPartnerName && (
           <ListItem
-            title="Game Notes"
-            chips={[game.original_game.notes]}
+            title="Your Partner"
+            chips={[userPartnerName]}
             chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
-            avatarIcon={<FileText size={20} color="#000000" />}
+            avatarIcon={<User size={20} color="#000000" />}
             style={styles.listItem}
           />
         )}
+
+        {/* Notes Section - Only show if there are actual notes beyond partner info */}
+        {game.original_game?.notes && (() => {
+          let displayNotes = game.original_game.notes;
+          
+          // Remove partner info from notes if it exists
+          if (displayNotes.includes('with partner:')) {
+            displayNotes = displayNotes.replace(/with partner: [^.]+\.?\s*/g, '').trim();
+          }
+          
+          // Only show if there are actual notes left
+          if (displayNotes && displayNotes.length > 0) {
+            return (
+              <ListItem
+                title="Game Notes"
+                chips={[displayNotes]}
+                chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
+                avatarIcon={<FileText size={20} color="#000000" />}
+                style={styles.listItem}
+              />
+            );
+          }
+          return null;
+        })()}
       </ScrollView>
 
       {/* Text Player Button */}

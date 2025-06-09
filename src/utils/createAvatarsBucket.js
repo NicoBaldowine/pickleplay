@@ -71,4 +71,10 @@ export const createAvatarsBucket = async () => {
     console.error('💥 Exception creating bucket:', error);
     return { success: false, error: error.message || error };
   }
+};
+
+// Alternative: Use direct public URLs without bucket dependency
+export const getPublicAvatarUrl = (fileName) => {
+  // Return a direct URL that should work if the bucket is public
+  return `${SUPABASE_URL}/storage/v1/object/public/avatars/${fileName}`;
 }; 

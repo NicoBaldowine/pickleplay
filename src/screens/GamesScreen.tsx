@@ -37,6 +37,7 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
   // Add effect to reload when refreshTrigger changes
   useEffect(() => {
     if (refreshTrigger && refreshTrigger > 0) {
+      console.log('🎯 GamesScreen: refreshTrigger changed, reloading games:', refreshTrigger);
       loadUserGames();
     }
   }, [refreshTrigger]);
@@ -51,6 +52,17 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
       if (currentUser) {
         // Fetch user's games
         const games = await gameService.getUserGames(currentUser.id);
+        console.log('🎮 Loaded games:', {
+          totalCount: games.length,
+          games: games.map(g => ({
+            id: g.id,
+            status: g.status,
+            date: g.date,
+            time: g.time,
+            venue: g.venue_name,
+            gameType: g.game_type
+          }))
+        });
         setUserGames(games);
       }
     } catch (err) {
@@ -66,34 +78,114 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
       setRefreshing(true);
       setError(null);
       
+      console.log('🔄 GamesScreen: Starting to refresh user games...');
+      
       // Get current user
       const currentUser = await authService.getCurrentUser();
       if (currentUser) {
+        console.log('✅ GamesScreen: Current user found:', currentUser.id);
+        
         // Fetch user's games
         const games = await gameService.getUserGames(currentUser.id);
+        console.log('🎮 GamesScreen: Refreshed games data:', {
+          totalCount: games.length,
+          games: games.map(g => ({
+            id: g.id,
+            status: g.status,
+            date: g.date,
+            time: g.time,
+            venue: g.venue_name,
+            gameType: g.game_type,
+            creator: g.creator?.full_name || 'Unknown'
+          }))
+        });
         setUserGames(games);
+      } else {
+        console.log('❌ GamesScreen: No current user found');
       }
     } catch (err) {
-      console.error('Error loading user games:', err);
+      console.error('💥 Error loading user games:', err);
       setError('Failed to load games');
     } finally {
       setRefreshing(false);
+      console.log('✅ GamesScreen: Refresh completed');
     }
   };
 
   const handleGamePress = (gameId: string) => {
     const game = userGames.find(g => g.id === gameId);
     if (game && game.status === 'upcoming') {
-      (navigation as any).navigate('UpcomingDetails', { game });
+      (navigation as any).navigate('UpcomingDetails', { 
+        game,
+        onRefresh: () => {
+          console.log('🔄 Refreshing GamesScreen data from UpcomingDetails...');
+          loadUserGames();
+        }
+      });
     } else {
       console.log(`Past game pressed: ${gameId}`);
       // TODO: Navigate to past game details or results
     }
   };
 
-  // Separate games by status
-  const upcomingGames = userGames.filter(game => game.status === 'upcoming');
-  const pastGames = userGames.filter(game => game.status === 'past');
+  // Separate games by status with automatic date checking
+  const now = new Date();
+  console.log('🕐 Current time:', now.toISOString());
+  
+  const isGameInPast = (game: UserGame) => {
+    // If already marked as past, keep it as past
+    if (game.status === 'past') {
+      console.log('📅 Game already marked as past:', game.id);
+      return true;
+    }
+    
+    // For upcoming games, check if the scheduled time has passed
+    if (game.status === 'upcoming') {
+      try {
+        // Parse the game date manually to avoid timezone issues
+        // game.date is in format "2025-06-06"
+        const [year, month, day] = game.date.split('-').map(Number);
+        const gameDate = new Date(year, month - 1, day); // month is 0-indexed
+        
+        // If we have time, parse it and add to the date using local time
+        if (game.time) {
+          const [hours, minutes] = game.time.split(':').map(Number);
+          gameDate.setHours(hours, minutes, 0, 0);
+        }
+        
+        console.log('🎮 Game check:', {
+          gameId: game.id,
+          originalDate: game.date,
+          gameDate: gameDate.toISOString(),
+          gameDateTime: gameDate.toLocaleString(),
+          currentTime: now.toLocaleString(),
+          gameTime: game.time,
+          isPast: gameDate < now,
+          venue: game.venue_name
+        });
+        
+        // If the game date/time has passed, treat it as past
+        return gameDate < now;
+      } catch (error) {
+        console.error('Error parsing game date/time:', error);
+        // If we can't parse the date, keep it as upcoming
+        return false;
+      }
+    }
+    
+    return false;
+  };
+
+  const upcomingGames = userGames.filter(game => !isGameInPast(game));
+  const pastGames = userGames.filter(game => isGameInPast(game));
+  
+  console.log('📊 Games classification:', {
+    totalGames: userGames.length,
+    upcomingCount: upcomingGames.length,
+    pastCount: pastGames.length,
+    upcomingIds: upcomingGames.map(g => g.id),
+    pastIds: pastGames.map(g => g.id)
+  });
 
   // Placeholder images for different game types
   const singlePlayerImages = [
@@ -194,11 +286,39 @@ const GamesScreen: React.FC<GamesScreenProps> = ({ refreshTrigger }) => {
       'rgba(0, 0, 0, 0.07)', // Default gray for past games
     ];
 
-    // Create avatar with opponent's photo or placeholder
+    // Create avatar - for doubles use creator partner photo (dupla), for singles use opponent photo
+    const getAvatarUrl = () => {
+      if (game.game_type === 'doubles') {
+        // For doubles games, always prioritize the creator's partner avatar (represents the dupla)
+        // Type assertion needed since original_game might not have full GameWithPlayers type
+        const originalGameWithDetails = game.original_game as any;
+        if (originalGameWithDetails?.creator_partner?.avatar_url) {
+          console.log(`🖼️ GamesScreen: Using creator partner avatar for doubles game ${game.id}:`, originalGameWithDetails.creator_partner.avatar_url);
+          return originalGameWithDetails.creator_partner.avatar_url;
+        }
+        // Fallback to creator avatar for doubles
+        if (game.creator?.avatar_url) {
+          console.log(`👤 GamesScreen: Using creator avatar fallback for doubles game ${game.id}:`, game.creator.avatar_url);
+          return game.creator.avatar_url;
+        }
+        // Final fallback to doubles placeholder image
+        console.log(`⚠️ GamesScreen: No creator partner/creator avatar found for doubles game ${game.id}, using placeholder`);
+        return doublePlayerImages[index % doublePlayerImages.length];
+      } else {
+        // For singles games, use opponent photo (creator avatar or placeholder)
+        if (game.creator?.avatar_url) {
+          console.log(`👤 GamesScreen: Using creator avatar for singles game ${game.id}:`, game.creator.avatar_url);
+          return game.creator.avatar_url;
+        }
+        console.log(`👤 GamesScreen: Using placeholder for singles game ${game.id}:`, opponentInfo.imageUrl);
+        return opponentInfo.imageUrl;
+      }
+    };
+
     const avatarIcon = (
       <View style={styles.avatarContainer}>
         <Image
-          source={{ uri: opponentInfo.imageUrl }}
+          source={{ uri: getAvatarUrl() }}
           style={styles.avatarImage}
         />
       </View>

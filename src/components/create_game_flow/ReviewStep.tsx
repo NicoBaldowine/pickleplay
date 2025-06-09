@@ -14,7 +14,8 @@ import {
   Alert,
 } from 'react-native';
 import { ArrowLeft, X, User, Users, Calendar, Clock, MapPin, Zap, FileText } from 'lucide-react-native';
-import { GameType, PlayerLevel, Court, CreateGameData } from './CreateGameFlow';
+import { GameType, PlayerLevel, CreateGameData } from './CreateGameFlow';
+import { Court } from '../../services/courtsService';
 import ListItem from '../ui/ListItem';
 import { globalTextStyles } from '../../styles/globalStyles';
 import { COLORS } from '../../constants/colors';
@@ -206,7 +207,7 @@ const ReviewStep: React.FC<ReviewStepProps> = ({
             />
 
             {/* Phone Number Field */}
-            <View style={styles.inputSection}>
+            <View style={[styles.inputSection, styles.firstInputSection]}>
               <Text style={styles.inputLabel}>Phone number</Text>
               <TextInput
                 style={[styles.inputField, phoneError && styles.inputFieldError]}
@@ -371,6 +372,9 @@ const styles = StyleSheet.create({
   },
   inputSection: {
     marginBottom: 24,
+  },
+  firstInputSection: {
+    marginTop: 32, // Extra spacing from the time ListItem
   },
   inputLabel: {
     fontSize: 16,

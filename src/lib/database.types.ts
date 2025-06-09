@@ -109,6 +109,8 @@ export interface Database {
           role: 'creator' | 'player';
           status: 'pending' | 'confirmed' | 'cancelled';
           team: 'A' | 'B' | null;
+          partner_name: string | null;
+          partner_id: string | null;
           joined_at: string;
           updated_at: string;
         };
@@ -119,6 +121,8 @@ export interface Database {
           role?: 'creator' | 'player';
           status?: 'pending' | 'confirmed' | 'cancelled';
           team?: 'A' | 'B' | null;
+          partner_name?: string | null;
+          partner_id?: string | null;
           joined_at?: string;
           updated_at?: string;
         };
@@ -129,6 +133,8 @@ export interface Database {
           role?: 'creator' | 'player';
           status?: 'pending' | 'confirmed' | 'cancelled';
           team?: 'A' | 'B' | null;
+          partner_name?: string | null;
+          partner_id?: string | null;
           joined_at?: string;
           updated_at?: string;
         };

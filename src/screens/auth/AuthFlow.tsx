@@ -3,26 +3,51 @@ import { Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import WelcomeScreen from './WelcomeScreen';
 import CitySelectionScreen from './CitySelectionScreen';
-import SportSelectionScreen from './SportSelectionScreen';
 import SignUpScreen from './SignUpScreen';
 import LoginScreen from './LoginScreen';
 import PersonalInfoScreen from './PersonalInfoScreen';
 import AvatarScreen from './AvatarScreen';
 import EmailVerificationScreen from './EmailVerificationScreen';
 import ForgotPasswordScreen from './ForgotPasswordScreen';
-import ResetPasswordScreen from './ResetPasswordScreen';
+import SetNewPasswordScreen from './SetNewPasswordScreen';
+import ForgotPasswordVerificationScreen from './ForgotPasswordVerificationScreen';
 import { UserData } from '../../lib/supabase';
 import { authService } from '../../services/authService';
 
 const AuthStack = createNativeStackNavigator();
 
-export default function AuthFlow() {
-  const [userData, setUserData] = useState<Partial<UserData & { password: string }>>({});
+interface AuthFlowProps {
+  initialRouteName?: string;
+  verifiedUserId?: string;
+  userEmail?: string;
+}
+
+export default function AuthFlow({ 
+  initialRouteName: propInitialRouteName = 'Welcome',
+  verifiedUserId: propVerifiedUserId,
+  userEmail: propUserEmail
+}: AuthFlowProps) {
+  const [userData, setUserData] = useState<Partial<UserData & { password: string }>>({
+    email: propUserEmail || '', // Pre-populate email if provided
+  });
   const [isLoading, setIsLoading] = useState(false);
-  const [verifiedUserId, setVerifiedUserId] = useState<string | null>(null);
-  const [initialRouteName, setInitialRouteName] = useState('Welcome');
+  const [verifiedUserId, setVerifiedUserId] = useState<string | null>(propVerifiedUserId || null);
+  const [initialRouteName, setInitialRouteName] = useState(propInitialRouteName);
+  const [navigationRef, setNavigationRef] = useState<any>(null);
+
+  // Log props for debugging
+  useEffect(() => {
+    console.log('🚀 AuthFlow mounted with props:', {
+      propInitialRouteName,
+      propVerifiedUserId,
+      propUserEmail,
+      finalInitialRouteName: initialRouteName,
+      finalVerifiedUserId: verifiedUserId
+    });
+  }, [propInitialRouteName, propVerifiedUserId, propUserEmail, initialRouteName, verifiedUserId]);
 
   // Handle deep linking for password reset
   useEffect(() => {
@@ -37,56 +62,49 @@ export default function AuthFlow() {
         // Check if this is a reset password link
         if (event.url.includes('reset-password') || event.url.includes('type=recovery')) {
           console.log('🔑 Detected reset password link, navigating to reset screen');
-          setInitialRouteName('Reset');
+          
+          // Extract and set session tokens from deep link
+          try {
+            const fragment = url.hash?.substring(1) || '';
+            const params = new URLSearchParams(fragment);
+            
+            const accessToken = params.get('access_token');
+            const refreshToken = params.get('refresh_token');
+            
+            if (accessToken && refreshToken) {
+              console.log('🔑 Found tokens in deep link, setting session...');
+              
+              // Import supabaseClient here to avoid circular dependencies
+              const { supabaseClient } = require('../../lib/supabase');
+              
+              // Set the session using the tokens from the deep link
+              await supabaseClient.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken
+              });
+              
+              console.log('✅ Session set successfully with tokens from deep link');
+            }
+          } catch (tokenError) {
+            console.error('⚠️ Error setting session from tokens:', tokenError);
+          }
+          
+          // If navigation is available, navigate directly
+          if (navigationRef?.current) {
+            console.log('🚀 Navigation available, resetting to Reset screen');
+            navigationRef.current.reset({
+              index: 0,
+              routes: [{ name: 'Reset' }],
+            });
+          } else {
+            console.log('⚠️ Navigation not ready, setting initial route');
+            setInitialRouteName('Reset');
+          }
           return;
         }
         
-        // Check if this is an email confirmation link
-        if (event.url.includes('type=email_confirmation') || 
-            event.url.includes('confirmation=true') ||
-            event.url.includes('access_token') ||
-            event.url.includes('refresh_token') ||
-            urlParams.get('type') === 'email_confirmation' ||
-            urlParams.get('type') === 'signup') {
-          console.log('📧 Detected email confirmation link');
-          
-          // Wait a moment for the auth state to update
-          setTimeout(async () => {
-            try {
-              console.log('🔄 Checking user session after email confirmation...');
-              const user = await authService.getCurrentUser();
-              if (user) {
-                console.log('✅ User confirmed, continuing to profile setup');
-                setVerifiedUserId(user.id);
-                setInitialRouteName('Personal');
-              } else {
-                console.log('⚠️ No user found after confirmation, trying to refresh session...');
-                
-                // Try to refresh the session first
-                await authService.forceAuthStateRefresh();
-                
-                // Wait a bit more and try again
-                setTimeout(async () => {
-                  const retryUser = await authService.getCurrentUser();
-                  if (retryUser) {
-                    console.log('✅ User found on retry, continuing to profile setup');
-                    setVerifiedUserId(retryUser.id);
-                    setInitialRouteName('Personal');
-                  } else {
-                    console.log('❌ Still no user found, asking to sign in');
-                    Alert.alert('Verification Complete', 'Please sign in to continue setting up your profile');
-                    setInitialRouteName('Login');
-                  }
-                }, 2000);
-              }
-            } catch (error) {
-              console.error('Error after email confirmation:', error);
-              Alert.alert('Verification Complete', 'Please sign in to continue');
-              setInitialRouteName('Login');
-            }
-          }, 1500);
-          return;
-        }
+        // Email verification will be handled directly by the verification system
+        // Don't interfere with deep link routing here
         
         console.log('ℹ️ Link not handled by AuthFlow, ignoring');
       } catch (error) {
@@ -103,8 +121,37 @@ export default function AuthFlow() {
           
           if (initialUrl.includes('reset-password') || initialUrl.includes('type=recovery')) {
             console.log('🔑 Initial URL is reset password, navigating to reset screen');
+            
+            // Extract and set session tokens from initial URL
+            try {
+              const url = new URL(initialUrl);
+              const fragment = url.hash?.substring(1) || '';
+              const params = new URLSearchParams(fragment);
+              
+              const accessToken = params.get('access_token');
+              const refreshToken = params.get('refresh_token');
+              
+              if (accessToken && refreshToken) {
+                console.log('🔑 Found tokens in initial URL, setting session...');
+                
+                // Import supabaseClient here to avoid circular dependencies
+                const { supabaseClient } = require('../../lib/supabase');
+                
+                // Set the session using the tokens from the initial URL
+                await supabaseClient.auth.setSession({
+                  access_token: accessToken,
+                  refresh_token: refreshToken
+                });
+                
+                console.log('✅ Session set successfully with tokens from initial URL');
+              }
+            } catch (tokenError) {
+              console.error('⚠️ Error setting session from initial URL tokens:', tokenError);
+            }
+            
             setInitialRouteName('Reset');
           }
+          // Email verification URLs will be handled by the app's auth system
         }
       } catch (error) {
         console.error('Error checking initial URL:', error);
@@ -119,49 +166,89 @@ export default function AuthFlow() {
     return () => {
       linkingSubscription.remove();
     };
-  }, []);
+  }, [navigationRef]);
 
-  const handleCreateProfile = useCallback(async () => {
+  const handleCreateProfile = useCallback(async (avatarUri?: string) => {
     try {
       console.log('🚀 Creating profile for verified user:', verifiedUserId);
+      console.log('📋 User data for profile creation:', JSON.stringify(userData, null, 2));
+      console.log('🖼️ Avatar URI for profile creation:', avatarUri);
       
-      if (!verifiedUserId) {
-        console.error('❌ No verified user ID');
-        Alert.alert('Error', 'User not verified');
-        return;
+      let effectiveUserId = verifiedUserId;
+      
+      if (!effectiveUserId) {
+        console.log('⚠️ No verifiedUserId, trying to get current user...');
+        const currentUser = await authService.getCurrentUser();
+        if (currentUser) {
+          effectiveUserId = currentUser.id;
+          console.log('✅ Got user ID from getCurrentUser:', effectiveUserId);
+        } else {
+          console.error('❌ No verified user ID and no current user');
+          Alert.alert('Error', 'User not verified. Please try logging in again.');
+          return;
+        }
       }
+      
+      console.log('🎯 Using user ID for profile creation:', effectiveUserId);
 
       if (!userData.name || !userData.lastname || !userData.level) {
-        console.error('❌ Missing user data:', userData);
+        console.error('❌ Missing user data:', JSON.stringify({
+          hasName: !!userData.name,
+          hasLastname: !!userData.lastname,
+          hasLevel: !!userData.level,
+          fullUserData: userData
+        }, null, 2));
         Alert.alert('Error', 'Please complete all required information');
         return;
       }
       
-      // Create profile for the verified user
-      const response = await authService.createProfile(verifiedUserId, userData as UserData);
+      console.log('✅ All required data present, calling createProfile...');
+      
+      // Ensure email is included in userData
+      const currentUser = await authService.getCurrentUser();
+      const fullUserData = {
+        ...userData,
+        email: userData.email || currentUser?.email || '',
+        avatarUri: avatarUri // Pass avatar URI directly
+      };
+      
+      console.log('📋 Final userData with email and avatar:', JSON.stringify(fullUserData, null, 2));
+      
+      // Create profile for the verified user - use direct method for registration
+      console.log('🔧 Using createProfileDirect for registration flow...');
+      const response = await authService.createProfileDirect(effectiveUserId as string, fullUserData as UserData);
+      
+      console.log('📦 Profile creation response:', JSON.stringify(response, null, 2));
       
       if (response.success) {
-        console.log('✅ Profile created successfully!');
+        console.log('✅ Profile created successfully! Registration complete!');
         
-        // Force auth state refresh
+        // Clear all cached data to force fresh load
+        console.log('🧹 Clearing cached data...');
+        await AsyncStorage.removeItem(`profile_${effectiveUserId}`);
+        await AsyncStorage.removeItem(`profile_cache_time_${effectiveUserId}`);
+        
+        // Profile created successfully - force App.tsx to detect the change
+        console.log('🎉 Registration flow completed! Forcing auth state refresh...');
+        
+        // Force refresh to trigger App.tsx auth state listener
         await authService.forceAuthStateRefresh();
         
-        // Additional refreshes with delays
-        setTimeout(async () => {
-          await authService.forceAuthStateRefresh();
-        }, 1000);
-        
-        setTimeout(async () => {
-          await authService.forceAuthStateRefresh();
-        }, 2000);
+        console.log('🔄 Auth state refreshed - App.tsx should now detect the profile and navigate to main app.');
         
       } else {
         console.error('❌ Failed to create profile:', response.error);
-        Alert.alert('Profile Creation Failed', response.error || 'Failed to create profile');
+        console.error('📋 Full error response:', JSON.stringify(response, null, 2));
+        Alert.alert('Profile Creation Failed', response.error || 'Failed to create profile. Please try again.');
       }
     } catch (error: any) {
       console.error('💥 Profile creation error:', error);
-      Alert.alert('Error', error.message || 'An unexpected error occurred');
+      console.error('📋 Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      Alert.alert('Error', error.message || 'An unexpected error occurred. Please try again.');
     }
   }, [verifiedUserId, userData]);
 
@@ -170,7 +257,9 @@ export default function AuthFlow() {
   }, []);
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={(ref) => setNavigationRef(ref)}
+    >
       <AuthStack.Navigator
         initialRouteName={initialRouteName}
         screenOptions={{
@@ -183,6 +272,7 @@ export default function AuthFlow() {
             <WelcomeScreen
               onSignUp={() => navigation.navigate('City')}
               onLogin={() => navigation.navigate('Login')}
+              hideSessionButton={true} // Always hide during auth flow
             />
           )}
         </AuthStack.Screen>
@@ -192,17 +282,8 @@ export default function AuthFlow() {
             <CitySelectionScreen
               onCitySelected={(city: string) => {
                 updateUserData({ city });
-                navigation.navigate('Sport');
+                navigation.navigate('SignUp');
               }}
-              onBack={() => navigation.goBack()}
-            />
-          )}
-        </AuthStack.Screen>
-
-        <AuthStack.Screen name="Sport">
-          {({ navigation }) => (
-            <SportSelectionScreen
-              onSportSelected={() => navigation.navigate('SignUp')}
               onBack={() => navigation.goBack()}
             />
           )}
@@ -270,16 +351,25 @@ export default function AuthFlow() {
             <ForgotPasswordScreen
               onBack={() => navigation.goBack()}
               onEmailSent={(email: string) => {
-                Alert.alert(
-                  'Check Your Email',
-                  'We sent you a password reset link. Click the link in the email to reset your password.',
-                  [
-                    {
-                      text: 'OK',
-                      onPress: () => navigation.navigate('Login')
-                    }
-                  ]
-                );
+                updateUserData({ email });
+                navigation.navigate('ForgotVerification');
+              }}
+            />
+          )}
+        </AuthStack.Screen>
+
+        <AuthStack.Screen name="ForgotVerification">
+          {({ navigation }) => (
+            <ForgotPasswordVerificationScreen
+              email={userData.email || ''}
+              onBack={() => navigation.goBack()}
+              onPasswordResetLinkClicked={() => {
+                console.log('🔑 Password reset link clicked, navigating to reset screen');
+                navigation.navigate('Reset');
+              }}
+              onResendEmail={() => {
+                console.log('📧 Resending password reset email');
+                // TODO: Add resend functionality
               }}
             />
           )}
@@ -287,11 +377,20 @@ export default function AuthFlow() {
 
         <AuthStack.Screen name="Reset">
           {({ navigation }) => (
-            <ResetPasswordScreen
+            <SetNewPasswordScreen
               onBack={() => navigation.navigate('Login')}
-              onPasswordReset={() => {
-                console.log('✅ Password reset successful');
-                navigation.navigate('Login');
+              onPasswordUpdated={() => {
+                console.log('✅ Password updated successfully');
+                Alert.alert(
+                  'Password Updated!',
+                  'Your password has been successfully updated. You can now log in with your new password.',
+                  [
+                    {
+                      text: 'Continue to Login',
+                      onPress: () => navigation.navigate('Login')
+                    }
+                  ]
+                );
               }}
             />
           )}
@@ -304,8 +403,14 @@ export default function AuthFlow() {
                 updateUserData(personalData);
                 navigation.navigate('Avatar');
               }}
+              onProfileCreated={() => {
+                console.log('✅ Profile created successfully from PersonalInfo! Navigating to avatar...');
+                navigation.navigate('Avatar');
+              }}
               onBack={() => navigation.goBack()}
               isCompletingRegistration={!!verifiedUserId}
+              verifiedUserId={verifiedUserId || undefined}
+              userData={userData}
             />
           )}
         </AuthStack.Screen>
@@ -313,17 +418,12 @@ export default function AuthFlow() {
         <AuthStack.Screen name="Avatar">
           {({ navigation }) => (
             <AvatarScreen
-              onAvatarComplete={async (avatarUri: string) => {
-                console.log('🖼️ Avatar selected, starting profile creation...');
-                updateUserData({ avatarUri });
-                await handleCreateProfile();
-              }}
               userData={{
                 name: userData.name || 'User',
                 lastname: userData.lastname || '',
                 level: userData.level || 'Beginner'
               }}
-              onBack={() => navigation.goBack()}
+              onBack={() => navigation.navigate('Personal')}
             />
           )}
         </AuthStack.Screen>
@@ -334,32 +434,26 @@ export default function AuthFlow() {
               email={userData.email || ''}
               password={userData.password}
               onVerificationComplete={async () => {
-                console.log('📧 Email verification complete!');
+                console.log('📧 Email verification complete! Navigating to PersonalInfoScreen...');
                 
                 try {
+                  // Get current user WITHOUT forcing auth refresh (avoid App.tsx interference)
                   const user = await authService.getCurrentUser();
                   if (user) {
-                    console.log('✅ User session found:', user.id);
+                    console.log('✅ User session found after verification:', user.id);
+                    console.log('🔧 Setting verifiedUserId to:', user.id);
                     setVerifiedUserId(user.id);
+                    console.log('🚀 Navigating directly to Personal screen...');
                     navigation.navigate('Personal');
                   } else {
-                    console.log('⏳ Waiting for session to be ready...');
-                    setTimeout(async () => {
-                      const retryUser = await authService.getCurrentUser();
-                      if (retryUser) {
-                        console.log('✅ User session found on retry:', retryUser.id);
-                        setVerifiedUserId(retryUser.id);
-                        navigation.navigate('Personal');
-                      } else {
-                        Alert.alert('Session Error', 'Please try logging in manually');
-                        navigation.navigate('Login');
-                      }
-                    }, 1000);
+                    console.log('⚠️ No user found after verification, this is unexpected during registration');
+                    Alert.alert('Verification Issue', 'Please try the registration process again.');
+                    navigation.navigate('SignUp');
                   }
                 } catch (error) {
-                  console.error('Error getting user session:', error);
-                  Alert.alert('Session Error', 'Please try logging in manually');
-                  navigation.navigate('Login');
+                  console.error('Error in onVerificationComplete:', error);
+                  Alert.alert('Verification Error', 'Please try the registration process again.');
+                  navigation.navigate('SignUp');
                 }
               }}
               onResendEmail={() => {

@@ -34,22 +34,62 @@ const FindDetails: React.FC<FindDetailsProps> = ({ game, user, profile, onBack, 
   ];
 
   const handleContinue = () => {
-    (navigation as any).navigate('FindReview', { 
-      game,
-      user,
-      profile,
-      onAcceptGame: (gameId: string, phoneNumber: string, notes?: string) => {
-        // Handle the actual game acceptance with phone and notes
-        onAcceptGame(gameId, true);
-      }
-    });
+    if (game.game_type === 'doubles') {
+      // For doubles games, navigate to partner selection
+      (navigation as any).navigate('FindDoubles', { 
+        game,
+        user,
+        profile,
+        onPartnerSelected: (partner: any) => {
+          // Navigate to FindReview with selected partner (same pattern as singles)
+          (navigation as any).navigate('FindReview', { 
+            game,
+            user,
+            profile,
+            selectedPartner: partner,
+            onAcceptGame: (gameId: string, phoneNumber: string, notes?: string, partnerId?: string, partnerName?: string) => {
+              // Handle the actual game acceptance with phone, notes, and partner info
+              onAcceptGame(gameId, true);
+            }
+          });
+        }
+      });
+    } else {
+      // For singles games, go directly to FindReview
+      (navigation as any).navigate('FindReview', { 
+        game,
+        user,
+        profile,
+        selectedPartner: null,
+        onAcceptGame: (gameId: string, phoneNumber: string, notes?: string) => {
+          // Handle the actual game acceptance with phone and notes
+          onAcceptGame(gameId, true);
+        }
+      });
+    }
   };
 
-  // Player profile picture
+  // Player profile picture - use partner avatar for doubles games
+  const getPlayerAvatarUrl = () => {
+    if (game.game_type === 'doubles' && game.creator_partner?.avatar_url) {
+      // For doubles games, use partner avatar if available (represents the dupla)
+      console.log(`🖼️ FindDetails: Using partner avatar for doubles game ${game.id}:`, game.creator_partner.avatar_url);
+      return game.creator_partner.avatar_url;
+    } else if (game.creator?.avatar_url) {
+      // Use creator avatar for singles or doubles without partner photo
+      console.log(`👤 FindDetails: Using creator avatar for game ${game.id}:`, game.creator.avatar_url);
+      return game.creator.avatar_url;
+    } else {
+      // Fallback to placeholder
+      console.log(`🔍 FindDetails: Using placeholder image for game ${game.id}`);
+      return playerImages[0];
+    }
+  };
+
   const playerAvatarIcon = (
     <View style={styles.playerPictureContainer}>
       <Image
-        source={{ uri: game.creator?.avatar_url || playerImages[0] }}
+        source={{ uri: getPlayerAvatarUrl() }}
         style={styles.playerPicture}
       />
     </View>

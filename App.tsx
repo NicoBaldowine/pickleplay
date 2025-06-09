@@ -30,6 +30,7 @@ import SchedulesScreen from './src/screens/SchedulesScreen';
 import ScheduleDetails from './src/screens/ScheduleDetails';
 import FindDetails from './src/screens/FindDetails';
 import FindReview from './src/screens/FindReview';
+import FindDoubles from './src/screens/FindDoubles';
 import UpcomingDetails from './src/screens/UpcomingDetails';
 import ProfileScreen from './src/screens/ProfileScreen';
 import ManageNotificationsScreen from './src/screens/ManageNotificationsScreen';
@@ -47,7 +48,7 @@ import AuthFlow from './src/screens/auth/AuthFlow';
 // Import auth service and types
 import { authService } from './src/services/authService';
 import { gameService } from './src/services/gameService';
-import { Profile } from './src/lib/supabase';
+import { Profile, supabaseClient } from './src/lib/supabase';
 
 // Import UI components for fallback CreateScreen
 import TopBar from './src/components/ui/TopBar';
@@ -188,18 +189,19 @@ function CreateGameFlowWrapper({ route, navigation, setScheduleRefreshTrigger }:
 
 // FindReview wrapper for navigation
 function FindReviewWrapper({ route, navigation, setGamesRefreshTrigger, user, profile }: any) {
-  const { game, onAcceptGame } = route.params;
+  const { game, selectedPartner, onAcceptGame } = route.params;
   
   const handleBack = () => {
     navigation.goBack();
   };
 
-  const handleAcceptGame = async (gameId: string, phoneNumber: string, notes?: string) => {
+  const handleAcceptGame = async (gameId: string, phoneNumber: string, notes?: string, partnerId?: string, partnerName?: string) => {
     try {
       const currentUser = await authService.getCurrentUser();
       if (currentUser && profile) {
-        // Note: phoneNumber and notes are collected in UI but joinGame only needs gameId and userId
-        const result = await gameService.joinGame(gameId, currentUser.id);
+        // Join the game with partner information (if any)
+        const result = await gameService.joinGame(gameId, currentUser.id, partnerId, partnerName);
+        
         if (result.success) {
           console.log('Game accepted successfully!');
           
@@ -268,15 +270,39 @@ function FindReviewWrapper({ route, navigation, setGamesRefreshTrigger, user, pr
       game={game}
       user={user}
       profile={profile}
+      selectedPartner={selectedPartner}
       onBack={handleBack}
       onAcceptGame={handleAcceptGame}
     />
   );
 }
 
+// FindDoubles wrapper for navigation
+function FindDoublesWrapper({ route, navigation, user, profile }: any) {
+  const { game, onPartnerSelected } = route.params;
+  
+  const handleBack = () => {
+    navigation.goBack();
+  };
+
+  const handlePartnerSelected = (partner: any) => {
+    onPartnerSelected(partner);
+  };
+
+  return (
+    <FindDoubles
+      game={game}
+      user={user}
+      profile={profile}
+      onBack={handleBack}
+      onPartnerSelected={handlePartnerSelected}
+    />
+  );
+}
+
 // UpcomingDetails wrapper for navigation
 function UpcomingDetailsWrapper({ route, navigation, setGamesRefreshTrigger }: any) {
-  const { game } = route.params;
+  const { game, onRefresh } = route.params;
   
   const handleBack = () => {
     navigation.goBack();
@@ -293,6 +319,12 @@ function UpcomingDetailsWrapper({ route, navigation, setGamesRefreshTrigger }: a
           // Trigger games refresh
           if (setGamesRefreshTrigger) {
             setGamesRefreshTrigger((prev: number) => prev + 1);
+          }
+          
+          // Call the onRefresh callback if provided (from HomeScreen)
+          if (onRefresh) {
+            console.log('🔄 Calling onRefresh callback from UpcomingDetails...');
+            onRefresh();
           }
           
           navigation.goBack();
@@ -416,11 +448,18 @@ function ManageDoublePartnersScreenWrapper({ route, navigation }: any) {
 
 // CreatePartnerScreen wrapper for navigation
 function CreatePartnerScreenWrapper({ route, navigation }: any) {
+  const { onPartnerCreated } = route.params || {};
+  
   const handleBack = () => {
     navigation.goBack();
   };
 
   const handlePartnerCreated = () => {
+    // Call the callback if provided (from FindDoubles or other screens)
+    if (onPartnerCreated) {
+      onPartnerCreated();
+    }
+    
     // Navigate back and refresh the calling screen
     navigation.goBack();
   };
@@ -589,9 +628,11 @@ function TabNavigator({ user, profile, onCreateGame, refreshTrigger, gamesRefres
             onNavigateToGames={onNavigateToGames}
             onSchedulePressFromHome={onNavigateToSchedules}
             refreshTrigger={refreshTrigger}
+            gamesRefreshTrigger={gamesRefreshTrigger}
             onSignOut={onSignOut}
             onNavigateToAccount={handleNavigateToAccount}
             onNavigateToDoublePartners={onNavigateToDoublePartners}
+            onNavigateToProfile={handleNavigateToProfile}
           />
         )}
       </Tab.Screen>
@@ -744,6 +785,25 @@ export default function App() {
     };
 
     initNotifications();
+  }, []);
+
+  // Auto-cleanup residual sessions on app start
+  useEffect(() => {
+    const cleanupResidualSessions = async () => {
+      try {
+        // Check if we have a user without verified email and no profile
+        const user = await authService.getCurrentUser();
+        if (user && !user.email_verified && user.user_metadata?.email_verified === false) {
+          console.log('🧹 Found unverified session from previous attempt, clearing...');
+          await authService.signOut();
+          await AsyncStorage.clear();
+        }
+      } catch (error) {
+        console.log('ℹ️ No residual session to clean');
+      }
+    };
+
+    cleanupResidualSessions();
   }, []);
 
   const checkAuthState = async () => {
@@ -934,6 +994,19 @@ export default function App() {
                 )}
               </MainStack.Screen>
               <MainStack.Screen
+                name="FindDoubles"
+                options={{ headerShown: false }}
+              >
+                {({ route, navigation }: any) => (
+                  <FindDoublesWrapper
+                    route={route}
+                    navigation={navigation}
+                    user={user}
+                    profile={profile}
+                  />
+                )}
+              </MainStack.Screen>
+              <MainStack.Screen
                 name="UpcomingDetails"
                 options={{ headerShown: false }}
               >
@@ -1038,16 +1111,25 @@ export default function App() {
   // If user exists but no profile, OR no user at all, show auth flow
   if (user && !profile) {
     console.log('⚠️ User exists but profile incomplete - showing auth flow to complete registration');
+    return (
+      <SafeAreaProvider>
+        <ExpoStatusBar style="dark" />
+        <AuthFlow 
+          initialRouteName="Personal" 
+          verifiedUserId={user.id}
+          userEmail={user.email}
+        />
+      </SafeAreaProvider>
+    );
   } else {
     console.log('🔑 No user found - showing auth flow');
+    return (
+      <SafeAreaProvider>
+        <ExpoStatusBar style="dark" />
+        <AuthFlow />
+      </SafeAreaProvider>
+    );
   }
-  
-  return (
-    <SafeAreaProvider>
-      <ExpoStatusBar style="dark" />
-      <AuthFlow />
-    </SafeAreaProvider>
-  );
 }
 
 const styles = StyleSheet.create({

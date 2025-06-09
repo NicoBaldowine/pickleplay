@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, StatusBar, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, StatusBar, ActivityIndicator, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X, UserPlus, User } from 'lucide-react-native';
 import TopBar from '../ui/TopBar';
@@ -53,15 +53,26 @@ const DoublesStep: React.FC<DoublesStepProps> = ({ onClose, onBack, onSelectPart
   };
 
   const renderPartnerItem = (partner: DoublePartner) => {
-    const levelChip = partner.partner_level || 'Unknown';
+    const levelChip = partner.partner_level 
+      ? partner.partner_level.charAt(0).toUpperCase() + partner.partner_level.slice(1)
+      : 'Unknown';
     
     const chips = [levelChip];
     const chipBackgrounds = ['rgba(0, 0, 0, 0.07)'];
 
+    const avatarIcon = partner.avatar_url ? (
+      <Image 
+        source={{ uri: partner.avatar_url }} 
+        style={{ width: 40, height: 40, borderRadius: 20 }}
+      />
+    ) : (
+      <User size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />
+    );
+
     return (
       <ListItem
         key={partner.id}
-        avatarIcon={<User size={ICON_SIZE_AVATAR} color={ICON_COLOR_DARK} />}
+        avatarIcon={avatarIcon}
         title={partner.partner_name || 'Unnamed Partner'}
         chips={chips}
         chipBackgrounds={chipBackgrounds}

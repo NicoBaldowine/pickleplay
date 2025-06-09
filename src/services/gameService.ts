@@ -18,6 +18,11 @@ export type Profile = Database['public']['Tables']['profiles']['Row'];
 export interface GameWithPlayers extends Game {
   creator?: Profile;
   players?: (GameUser & { profile?: Profile })[];
+  creator_partner?: {
+    id: string;
+    name: string;
+    avatar_url?: string;
+  };
 }
 
 export interface UserGame {
@@ -32,6 +37,11 @@ export interface UserGame {
   players_count: string;
   original_game: Game;
   creator?: Profile;
+  partner?: {
+    id: string;
+    name: string;
+    avatar_url?: string;
+  };
 }
 
 class GameService {
@@ -91,8 +101,91 @@ class GameService {
     }
   }
 
+  /**
+   * Clean up expired games - automatically expire and remove games where:
+   * 1. The scheduled time has passed
+   * 2. The game is still 'open' (no one joined)
+   * 3. Only the creator is in the game (current_players === 1)
+   */
+  async cleanupExpiredGames(): Promise<void> {
+    try {
+      const now = new Date();
+      console.log('🧹 Starting cleanup of expired games at:', now.toISOString());
+
+      // Get all open games that have passed their scheduled time
+      const result = await supabaseClient.query(this.tableName, {
+        select: '*',
+        filters: { status: 'open' }
+      });
+
+      if (result.error) {
+        console.error('Error fetching games for cleanup:', result.error);
+        return;
+      }
+
+      const games = result.data || [];
+      const expiredGames: Game[] = [];
+
+      // Check each game to see if it has expired
+      for (const game of games) {
+        const gameDateTime = new Date(`${game.scheduled_date}T${game.scheduled_time}`);
+        
+        // If the game time has passed and only creator is in the game
+        if (gameDateTime < now && game.current_players === 1) {
+          expiredGames.push(game);
+        }
+      }
+
+      console.log(`🕐 Found ${expiredGames.length} expired games to cleanup`);
+
+      // Process each expired game
+      for (const expiredGame of expiredGames) {
+        try {
+          console.log(`⏰ Expiring game ${expiredGame.id} scheduled for ${expiredGame.scheduled_date} ${expiredGame.scheduled_time}`);
+
+          // Send expiry notification to the creator
+          await notificationService.scheduleGameExpiredNotification(
+            expiredGame.id,
+            expiredGame.game_type as 'singles' | 'doubles',
+            expiredGame.scheduled_date,
+            expiredGame.scheduled_time
+          );
+
+          // Cancel any scheduled notifications for this game
+          await notificationService.cancelGameNotifications(expiredGame.id);
+
+          // Update game status to 'cancelled' instead of deleting
+          // This preserves the record but removes it from active lists
+          const { error: updateError } = await supabaseClient
+            .from(this.tableName)
+            .update({ 
+              status: 'cancelled',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', expiredGame.id);
+
+          if (updateError) {
+            console.error(`Error updating expired game ${expiredGame.id}:`, updateError);
+          } else {
+            console.log(`✅ Successfully expired game ${expiredGame.id}`);
+          }
+        } catch (error) {
+          console.error(`Error processing expired game ${expiredGame.id}:`, error);
+          // Continue with other games even if one fails
+        }
+      }
+
+      console.log('🧹 Cleanup of expired games completed');
+    } catch (error) {
+      console.error('Error during expired games cleanup:', error);
+    }
+  }
+
   async getUserSchedules(userId: string): Promise<GameWithPlayers[]> {
     try {
+      // Clean up expired games before fetching user schedules
+      await this.cleanupExpiredGames();
+
       // Get ONLY games where user is creator (not participant)
       const createdGamesResult = await supabaseClient.query(this.tableName, {
         select: '*',
@@ -119,14 +212,31 @@ class GameService {
 
   async getUserGames(userId: string): Promise<UserGame[]> {
     try {
+      // Clean up expired games before fetching user games
+      await this.cleanupExpiredGames();
+
       // Get only games where user joined (not games they created)
       const joinedGames = await this.getUserJoinedGames(userId);
       
       console.log(`🎮 DEBUG: User ${userId} has ${joinedGames.length} joined games:`, joinedGames.map(g => ({ id: g.id, type: g.game_type, creator: g.creator_id })));
       
+      // Filter to show games where:
+      // 1. User joined someone else's game (user is NOT creator), OR
+      // 2. User created the game AND others have joined (has more than 1 participant)
+      const actuallyJoinedGames = joinedGames.filter(game => {
+        if (game.creator_id !== userId) {
+          // User joined someone else's game
+          return true;
+        } else {
+          // User created the game - only show if others have joined
+          return game.current_players > 1;
+        }
+      });
+      console.log(`🎯 DEBUG: Filtered to games user actually joined (not created):`, actuallyJoinedGames.map(g => ({ id: g.id, type: g.game_type, creator: g.creator_id })));
+      
       // Fetch opponent information for all games
       const gamesWithOpponents = await Promise.all(
-        joinedGames.map(async (game) => {
+        actuallyJoinedGames.map(async (game) => {
           console.log(`🔍 DEBUG: Processing game ${game.id}, type: ${game.game_type}, creator: ${game.creator_id}`);
           
           // Get all participants in this game
@@ -145,11 +255,8 @@ class GameService {
 
           console.log(`⚔️ DEBUG: Opponents for user ${userId} in game ${game.id}:`, opponentIds);
 
-          // Skip games where user has no opponents (these should stay in Schedules)
-          if (opponentIds.length === 0) {
-            console.log(`⏭️ DEBUG: Skipping game ${game.id} - no opponents found`);
-            return null;
-          }
+          // For games the user joined from others, always show them even if no opponents yet
+          // The fact that they're in game_users means they accepted/joined the game
 
           let opponentInfo = {
             name: 'Unknown Player',
@@ -211,6 +318,102 @@ class GameService {
 
           console.log(`🎯 DEBUG: Final opponent info for game ${game.id}:`, opponentInfo);
 
+          // Get current user's partner information for doubles games
+          let partnerInfo = undefined;
+          if (game.game_type === 'doubles') {
+            try {
+              console.log(`🔍 DEBUG: Getting partner info for doubles game ${game.id}, user: ${userId}`);
+              
+              // Get current user's game_users record to find partner_id
+              const currentUserGameResult = await supabaseClient.query(this.gameUsersTable, {
+                select: 'partner_id, partner_name',
+                filters: { 
+                  game_id: game.id,
+                  user_id: userId 
+                },
+                single: true
+              });
+
+              console.log(`🎯 DEBUG: Current user game_users record:`, currentUserGameResult.data);
+              console.log(`🔍 DEBUG: Checking partner_id field:`, {
+                hasPartnerName: !!currentUserGameResult.data?.partner_name,
+                partnerName: currentUserGameResult.data?.partner_name,
+                hasPartnerId: !!currentUserGameResult.data?.partner_id,
+                partnerId: currentUserGameResult.data?.partner_id,
+                fullRecord: currentUserGameResult.data
+              });
+
+              if (currentUserGameResult.data?.partner_id) {
+                console.log(`🔍 DEBUG: Found partner_id: ${currentUserGameResult.data.partner_id}, querying double_partners table...`);
+                
+                // Get partner details from double_partners table
+                const partnerResult = await supabaseClient.query('double_partners', {
+                  select: 'id, partner_name, avatar_url',
+                  filters: { id: currentUserGameResult.data.partner_id },
+                  single: true
+                });
+
+                console.log(`📊 DEBUG: Partner query result:`, partnerResult);
+
+                if (partnerResult.data) {
+                  partnerInfo = {
+                    id: partnerResult.data.id,
+                    name: partnerResult.data.partner_name,
+                    avatar_url: partnerResult.data.avatar_url
+                  };
+                  console.log(`✅ DEBUG: Successfully found partner info for game ${game.id}:`, {
+                    partnerId: partnerInfo.id,
+                    partnerName: partnerInfo.name,
+                    hasAvatar: !!partnerInfo.avatar_url,
+                    avatarUrl: partnerInfo.avatar_url
+                  });
+                } else {
+                  console.log(`❌ DEBUG: Partner not found in double_partners table for partner_id: ${currentUserGameResult.data.partner_id}`);
+                }
+              } else if (currentUserGameResult.data?.partner_name) {
+                console.log(`🔍 DEBUG: No partner_id but found partner_name: ${currentUserGameResult.data.partner_name}, trying to find by name...`);
+                
+                // Fallback: Try to find partner by name for legacy games
+                const currentUser = await authService.getCurrentUser();
+                if (currentUser?.id) {
+                  const partnerByNameResult = await supabaseClient.query('double_partners', {
+                    select: 'id, partner_name, avatar_url',
+                    filters: { 
+                      user_id: currentUser.id,
+                      partner_name: currentUserGameResult.data.partner_name 
+                    },
+                    single: true
+                  });
+
+                  console.log(`📊 DEBUG: Partner by name query result:`, partnerByNameResult);
+
+                  if (partnerByNameResult.data) {
+                    partnerInfo = {
+                      id: partnerByNameResult.data.id,
+                      name: partnerByNameResult.data.partner_name,
+                      avatar_url: partnerByNameResult.data.avatar_url
+                    };
+                    console.log(`✅ DEBUG: Found partner by name for game ${game.id}:`, {
+                      partnerId: partnerInfo.id,
+                      partnerName: partnerInfo.name,
+                      hasAvatar: !!partnerInfo.avatar_url,
+                      avatarUrl: partnerInfo.avatar_url
+                    });
+                  } else {
+                    console.log(`❌ DEBUG: Partner not found by name: ${currentUserGameResult.data.partner_name}`);
+                  }
+                }
+              } else {
+                console.log(`⚠️ DEBUG: No partner_id or partner_name found for user ${userId} in game ${game.id}. Game_users data:`, currentUserGameResult.data);
+              }
+            } catch (error) {
+              console.error(`💥 ERROR getting partner info for game ${game.id}:`, error);
+            }
+          }
+
+          // Get complete game details (including creator_partner) using existing method
+          const gameWithDetails = await this.getGameWithDetails(game.id);
+
           const userGame: UserGame = {
             id: game.id,
             venue_name: game.venue_name,
@@ -221,7 +424,7 @@ class GameService {
             game_type: game.game_type,
             status: new Date(`${game.scheduled_date}T${game.scheduled_time}`) > new Date() ? 'upcoming' : 'past',
             players_count: `${game.current_players}/${game.max_players}`,
-            original_game: game,
+            original_game: gameWithDetails || game,
             creator: { 
               full_name: opponentInfo.name,
               avatar_url: opponentInfo.imageUrl,
@@ -232,7 +435,8 @@ class GameService {
               pickleball_level: 'beginner',
               created_at: '',
               updated_at: ''
-            } as Profile
+            } as Profile,
+            partner: partnerInfo
           };
           return userGame;
         })
@@ -376,6 +580,9 @@ class GameService {
 
   async getAvailableGames(excludeUserId: string): Promise<GameWithPlayers[]> {
     try {
+      // Clean up expired games before fetching available games
+      await this.cleanupExpiredGames();
+
       // Get all open games (open status already excludes cancelled games)
       const result = await supabaseClient.query(this.tableName, {
         select: '*',
@@ -413,72 +620,105 @@ class GameService {
     }
   }
 
-  async joinGame(gameId: string, userId: string): Promise<{ success: boolean; error?: string }> {
+  async updateGameUserPartner(gameId: string, userId: string, partnerId: string, partnerName: string): Promise<{ success: boolean; error?: string }> {
     try {
-      // First check if user session is valid
-      const userResult = await supabaseClient.auth.getUser();
-      if (!userResult.data?.user) {
-        return { success: false, error: 'Session expired. Please log in again.' };
+      console.log('🔄 Updating game_users record with partner info:', {
+        gameId,
+        userId,
+        partnerId,
+        partnerName
+      });
+
+      // First, get the record to update (we need to handle composite filters manually)
+      const existingRecordResult = await supabaseClient.query(this.gameUsersTable, {
+        select: '*',
+        filters: { 
+          game_id: gameId,
+          user_id: userId 
+        },
+        single: true
+      });
+
+      if (existingRecordResult.error || !existingRecordResult.data) {
+        console.error('Error finding game_users record:', existingRecordResult.error);
+        return { success: false, error: 'Game user record not found' };
       }
 
-      // Check if user is already in the game
-      const existingResult = await supabaseClient.query(this.gameUsersTable, {
-        select: 'id',
+      // Update the record using the ID (since our custom client doesn't support composite filters for updates)
+      const updateResult = await supabaseClient.from(this.gameUsersTable)
+        .update({
+          partner_id: partnerId,
+          partner_name: partnerName
+        })
+        .eq('id', existingRecordResult.data.id);
+
+      if (updateResult.error) {
+        console.error('Error updating game_users with partner info:', updateResult.error);
+        return { success: false, error: updateResult.error.message || 'Failed to update partner information' };
+      }
+
+      console.log('✅ Successfully updated game_users record with partner info');
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating game user partner:', error);
+      const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+      return { success: false, error: message };
+    }
+  }
+
+  async joinGame(gameId: string, userId: string, partnerId?: string, partnerName?: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      // First check if user is already in the game
+      const existingUser = await supabaseClient.query(this.gameUsersTable, {
+        select: '*',
         filters: { game_id: gameId, user_id: userId },
         single: true
       });
 
-      if (existingResult.data) {
+      if (existingUser.data) {
         return { success: false, error: 'You are already in this game' };
       }
 
-      // Get game details for notification
+      // Check if game exists and get details
       const gameDetails = await this.getGameWithDetails(gameId);
       if (!gameDetails) {
         return { success: false, error: 'Game not found' };
       }
 
-      // First attempt - Add user to game
-      const { error } = await supabaseClient.from(this.gameUsersTable).insert({
+      // Check if game is available for joining
+      if (gameDetails.status !== 'open') {
+        return { success: false, error: 'Game is no longer available for joining' };
+      }
+
+      // Check if game has space
+      if (gameDetails.current_players >= gameDetails.max_players) {
+        return { success: false, error: 'Game is full' };
+      }
+
+      // For doubles games, validate partner information
+      if (gameDetails.game_type === 'doubles' && (!partnerId || !partnerName)) {
+        return { success: false, error: 'Partner information is required for doubles games' };
+      }
+
+      // Add user to game with partner info
+      const gameUserData: any = {
         game_id: gameId,
         user_id: userId,
         role: 'player',
         status: 'confirmed'
-      });
+      };
+
+      // Add partner info for doubles games
+      if (gameDetails.game_type === 'doubles' && partnerId && partnerName) {
+        gameUserData.partner_id = partnerId;
+        gameUserData.partner_name = partnerName;
+      }
+
+      const { error } = await supabaseClient.from(this.gameUsersTable).insert(gameUserData);
 
       if (error) {
         console.error('Error joining game:', error);
-        
-        // Check for JWT expired errors and attempt refresh
-        if (error.message?.includes('JWT expired') || error.code === 'PGRST301') {
-          console.log('🔄 JWT expired, attempting to refresh session...');
-          
-          // Try to refresh session
-          const refreshResult = await authService.refreshSession();
-          if (refreshResult.success) {
-            console.log('✅ Session refreshed, retrying join game...');
-            
-            // Retry adding user to game with fresh token
-            const { error: retryError } = await supabaseClient.from(this.gameUsersTable).insert({
-              game_id: gameId,
-              user_id: userId,
-              role: 'player',
-              status: 'confirmed'
-            });
-            
-            if (retryError) {
-              console.error('Error joining game after refresh:', retryError);
-              return { success: false, error: retryError.message || 'Failed to join game after refresh' };
-            }
-            
-            console.log('✅ Successfully joined game after session refresh');
-          } else {
-            console.log('❌ Session refresh failed:', refreshResult.error);
-            return { success: false, error: 'Session expired and could not be refreshed. Please log in again.' };
-          }
-        } else {
-          return { success: false, error: error.message || 'Failed to join game' };
-        }
+        return { success: false, error: error.message || 'Failed to join game' };
       }
 
       // Update current_players count
@@ -555,13 +795,27 @@ class GameService {
           if (refreshResult.success) {
             console.log('✅ Session refreshed in catch block, retrying join game...');
             
-            // Retry the entire operation
-            const { error: retryError } = await supabaseClient.from(this.gameUsersTable).insert({
+            // Get game details for retry
+            const retryGameDetails = await this.getGameWithDetails(gameId);
+            if (!retryGameDetails) {
+              return { success: false, error: 'Game not found during retry' };
+            }
+
+            // Retry the entire operation with same data as original attempt
+            const retryGameUserData: any = {
               game_id: gameId,
               user_id: userId,
               role: 'player',
               status: 'confirmed'
-            });
+            };
+
+            // Add partner info for doubles games in retry
+            if (retryGameDetails.game_type === 'doubles' && partnerId && partnerName) {
+              retryGameUserData.partner_id = partnerId;
+              retryGameUserData.partner_name = partnerName;
+            }
+
+            const { error: retryError } = await supabaseClient.from(this.gameUsersTable).insert(retryGameUserData);
             
             if (retryError) {
               return { success: false, error: retryError.message || 'Failed to join game after refresh' };
@@ -752,10 +1006,45 @@ class GameService {
         })
       );
 
+      // For doubles games, get creator's partner info if available
+      let creatorPartner = undefined;
+      if (game.game_type === 'doubles') {
+        try {
+          // Find creator's game_users record to get partner info
+          const creatorPlayer = players.find((p: GameUser) => p.user_id === game.creator_id);
+          if (creatorPlayer?.partner_id) {
+            console.log(`🔍 Getting creator's partner info for game ${gameId}, partner_id: ${creatorPlayer.partner_id}`);
+            
+            // Get partner details from double_partners table
+            const partnerResult = await supabaseClient.query('double_partners', {
+              select: 'id, partner_name, avatar_url',
+              filters: { id: creatorPlayer.partner_id },
+              single: true
+            });
+
+            if (partnerResult.data) {
+              creatorPartner = {
+                id: partnerResult.data.id,
+                name: partnerResult.data.partner_name,
+                avatar_url: partnerResult.data.avatar_url
+              };
+              console.log(`✅ Found creator's partner for game ${gameId}:`, creatorPartner);
+            } else {
+              console.log(`❌ Creator's partner not found in double_partners table for partner_id: ${creatorPlayer.partner_id}`);
+            }
+          } else {
+            console.log(`⚠️ No partner_id found for creator in game ${gameId}`);
+          }
+        } catch (error) {
+          console.error(`❌ Error getting creator's partner info for game ${gameId}:`, error);
+        }
+      }
+
       return {
         ...game,
         creator: creatorResult.data,
-        players: playerProfiles
+        players: playerProfiles,
+        creator_partner: creatorPartner
       };
     } catch (error) {
       console.error('Error fetching game with details:', error);
@@ -802,6 +1091,9 @@ class GameService {
   // Update getAvailableGames to include player details
   async getAvailableGamesWithDetails(excludeUserId: string): Promise<GameWithPlayers[]> {
     try {
+      // Clean up expired games before fetching available games
+      await this.cleanupExpiredGames();
+      
       const games = await this.getAvailableGames(excludeUserId);
       
       // Fetch details for each game

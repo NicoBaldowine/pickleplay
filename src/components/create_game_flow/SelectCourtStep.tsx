@@ -68,12 +68,14 @@ const SelectCourtStep: React.FC<SelectCourtStepProps> = ({
           
           const chips = [
             court.distance || 'Distance TBD', // Will be calculated later with geolocation
-            paymentStatus
+            paymentStatus,
+            court.city
           ];
           
           const chipBackgrounds = [
             'rgba(0, 0, 0, 0.07)', // Distance chip
             'rgba(0, 0, 0, 0.07)', // Payment status chip
+            'rgba(0, 0, 0, 0.07)', // City chip
           ];
 
           return (

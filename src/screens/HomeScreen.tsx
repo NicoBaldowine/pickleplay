@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Text, StatusBar, TouchableOpacity, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronRight, User, Users, Calendar, Search, LogOut } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
+import { ChevronRight, User, Users, Calendar, Search, LogOut, Camera } from 'lucide-react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Import your custom components
@@ -26,14 +26,37 @@ interface HomeScreenProps {
   onNavigateToGames?: () => void;
   onSchedulePressFromHome?: (scheduleId: string) => void;
   refreshTrigger?: number;
+  gamesRefreshTrigger?: number;
   onSignOut?: () => void;
   onNavigateToAccount?: () => void;
   onNavigateToDoublePartners?: () => void;
+  onNavigateToProfile?: () => void;
 }
 
 const ICON_SIZE_AVATAR = 20;
 
-const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSchedules, onNavigateToGames, onSchedulePressFromHome, refreshTrigger, onSignOut, onNavigateToAccount, onNavigateToDoublePartners }) => {
+// Skeleton Loader Component
+const SkeletonListItem = () => (
+  <View style={styles.skeletonItem}>
+    {/* Avatar skeleton */}
+    <View style={styles.skeletonAvatar} />
+    
+    {/* Content skeleton */}
+    <View style={styles.skeletonContent}>
+      {/* Title skeleton */}
+      <View style={styles.skeletonTitle} />
+      
+      {/* Chips skeleton */}
+      <View style={styles.skeletonChips}>
+        <View style={[styles.skeletonChip, styles.skeletonChipLarge]} />
+        <View style={[styles.skeletonChip, styles.skeletonChipMedium]} />
+        <View style={[styles.skeletonChip, styles.skeletonChipSmall]} />
+      </View>
+    </View>
+  </View>
+);
+
+const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSchedules, onNavigateToGames, onSchedulePressFromHome, refreshTrigger, gamesRefreshTrigger, onSignOut, onNavigateToAccount, onNavigateToDoublePartners, onNavigateToProfile }) => {
   const [upcomingGames, setUpcomingGames] = useState<UserGame[]>([]);
   const [userSchedules, setUserSchedules] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +86,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
     }
   }, [refreshTrigger]);
 
+  // Reload data when gamesRefreshTrigger changes (when games are accepted/cancelled)
+  useEffect(() => {
+    if (gamesRefreshTrigger && gamesRefreshTrigger > 0) {
+      console.log('🎮 HomeScreen reloading due to gamesRefreshTrigger:', gamesRefreshTrigger);
+      loadUpcomingGames();
+    }
+  }, [gamesRefreshTrigger]);
+
+  // Reload data whenever the screen comes into focus (when navigating back from other screens)
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🏠 HomeScreen focused - reloading data...');
+      loadUpcomingGames();
+    }, [])
+  );
+
   const loadUpcomingGames = async () => {
     try {
       setLoading(true);
@@ -91,6 +130,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
       (navigation as any).navigate('UpcomingDetails', { 
         game,
         onRefresh: () => {
+          console.log('🔄 Refreshing HomeScreen data from UpcomingDetails...');
           loadUpcomingGames();
         }
       });
@@ -104,6 +144,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
         schedule,
         user,
         onRefresh: () => {
+          console.log('🔄 Refreshing HomeScreen data from ScheduleDetails...');
           loadUpcomingGames();
         }
       });
@@ -121,9 +162,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
   };
 
   // Task handlers for new users
-  const handleFindGamesTask = () => {
-    console.log('Find games task pressed');
-    onNavigateToGames?.();
+  const handleAddProfilePictureTask = () => {
+    console.log('Add profile picture task pressed');
+    onNavigateToProfile?.();
+  };
+
+  const handleAddPartnersTask = () => {
+    console.log('Add doubles partners task pressed');
+    onNavigateToDoublePartners?.();
   };
 
   const handleScheduleGameTask = () => {
@@ -131,9 +177,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
     onNavigateToSchedules?.();
   };
 
-  const handleAddPartnersTask = () => {
-    console.log('Add doubles partners task pressed');
-    onNavigateToDoublePartners?.();
+  const handleFindGamesTask = () => {
+    console.log('Find games task pressed');
+    onNavigateToGames?.();
   };
 
   const renderUpcomingGame = (game: UserGame, index: number) => {
@@ -204,11 +250,39 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
       'rgba(255, 255, 255, 0.3)', // White with 30% opacity for upcoming games
     ];
 
-    // Create avatar with opponent's real photo
+    // Create avatar - for doubles use creator partner photo (dupla), for singles use opponent photo
+    const getAvatarUrl = () => {
+      if (game.game_type === 'doubles') {
+        // For doubles games, always prioritize the creator's partner avatar (represents the dupla)
+        // Type assertion needed since original_game might not have full GameWithPlayers type
+        const originalGameWithDetails = game.original_game as any;
+        if (originalGameWithDetails?.creator_partner?.avatar_url) {
+          console.log(`🖼️ HomeScreen: Using creator partner avatar for doubles game ${game.id}:`, originalGameWithDetails.creator_partner.avatar_url);
+          return originalGameWithDetails.creator_partner.avatar_url;
+        }
+        // Fallback to creator avatar for doubles
+        if (game.creator?.avatar_url) {
+          console.log(`👤 HomeScreen: Using creator avatar fallback for doubles game ${game.id}:`, game.creator.avatar_url);
+          return game.creator.avatar_url;
+        }
+        // Final fallback to doubles placeholder image
+        console.log(`⚠️ HomeScreen: No creator partner/creator avatar found for doubles game ${game.id}, using placeholder`);
+        return doublePlayerImages[index % doublePlayerImages.length];
+      } else {
+        // For singles games, use opponent photo (creator avatar or placeholder)
+        if (game.creator?.avatar_url) {
+          console.log(`👤 HomeScreen: Using creator avatar for singles game ${game.id}:`, game.creator.avatar_url);
+          return game.creator.avatar_url;
+        }
+        console.log(`👤 HomeScreen: Using placeholder for singles game ${game.id}:`, opponentInfo.imageUrl);
+        return opponentInfo.imageUrl;
+      }
+    };
+
     const avatarIcon = (
       <View style={styles.avatarContainer}>
         <Image
-          source={{ uri: opponentInfo.imageUrl }}
+          source={{ uri: getAvatarUrl() }}
           style={styles.avatarImage}
         />
       </View>
@@ -248,7 +322,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
     const chips = [
       gameTypeCapitalized, // Game type
       skillLevelCapitalized, // Level
-      `${schedule.venue_name} - ${schedule.city}` || 'TBD', // Location
+      schedule.venue_name || 'TBD', // Location
     ];
     
     // Define chip background colors based on game type (same as SchedulesScreen)
@@ -312,12 +386,20 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
     );
   };
 
+  const renderSkeletonLoader = () => (
+    <View style={styles.skeletonContainer}>
+      {Array.from({ length: 3 }).map((_, index) => (
+        <SkeletonListItem key={index} />
+      ))}
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}> 
       <StatusBar barStyle="dark-content" />
       <View style={styles.headerContainer}>
         <View style={styles.headerContent}>
-          <Text style={styles.title}>{`Welcome, ${profile?.first_name || 'User'}`}</Text>
+        <Text style={styles.title}>{`Welcome, ${profile?.first_name || 'User'}`}</Text>
         </View>
       </View>
       <ScrollView style={styles.scrollViewContainer} contentContainerStyle={styles.scrollViewContent}>
@@ -327,11 +409,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
           <>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Your tasks</Text>
-            </View>
+          </View>
             {renderTaskItem(
-              "Find games around you", 
-              <Search size={ICON_SIZE_AVATAR} color="#000000" />,
-              handleFindGamesTask
+              "Add a profile picture", 
+              <Camera size={ICON_SIZE_AVATAR} color="#000000" />,
+              handleAddProfilePictureTask
+            )}
+            {renderTaskItem(
+              "Add Doubles Partners", 
+              <Users size={ICON_SIZE_AVATAR} color="#000000" />,
+              handleAddPartnersTask
             )}
             {renderTaskItem(
               "Schedule a game", 
@@ -339,9 +426,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
               handleScheduleGameTask
             )}
             {renderTaskItem(
-              "Add Doubles Partners", 
-              <Users size={ICON_SIZE_AVATAR} color="#000000" />,
-              handleAddPartnersTask
+              "Find games around you", 
+              <Search size={ICON_SIZE_AVATAR} color="#000000" />,
+              handleFindGamesTask
             )}
           </>
         ) : (
@@ -351,20 +438,26 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ user, profile, onNavigateToSche
             {!loading && displayUpcomingGames.length > 0 && (
               <>
                 {renderSectionHeader('Upcoming Games', handleSeeAllUpcoming)}
-                {displayUpcomingGames.map((game, index) => renderUpcomingGame(game, index))}
+                {loading ? (
+                  renderSkeletonLoader()
+                ) : (
+                  displayUpcomingGames.map((game, index) => renderUpcomingGame(game, index))
+                )}
                 <View style={styles.sectionSpacing} />
               </>
-            )}
+        )}
 
-            {/* Schedules Section */}
-            {renderSectionHeader('Your Schedules', handleSeeAllSchedules)}
-            {displaySchedules.length > 0 ? (
-              displaySchedules.map((schedule, index) => renderSchedule(schedule, index))
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No upcoming schedules</Text>
-                <Text style={styles.emptySubtext}>Schedules will appear here</Text>
-              </View>
+        {/* Schedules Section */}
+        {renderSectionHeader('Your Schedules', handleSeeAllSchedules)}
+        {loading ? (
+          renderSkeletonLoader()
+        ) : displaySchedules.length > 0 ? (
+          displaySchedules.map((schedule, index) => renderSchedule(schedule, index))
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No upcoming schedules</Text>
+            <Text style={styles.emptySubtext}>Schedules will appear here</Text>
+          </View>
             )}
           </>
         )}
@@ -475,6 +568,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 60,
+  },
+  skeletonContainer: {
+    flex: 1,
+    gap: 8,
+  },
+  skeletonItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5E9CF',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    minHeight: 80,
+  },
+  skeletonAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.07)',
+    marginRight: 12,
+  },
+  skeletonContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  skeletonTitle: {
+    height: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.07)',
+    borderRadius: 9,
+    marginBottom: 10,
+    width: '70%',
+  },
+  skeletonChips: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  skeletonChip: {
+    height: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.07)',
+    borderRadius: 10,
+  },
+  skeletonChipLarge: {
+    width: 100,
+  },
+  skeletonChipMedium: {
+    width: 80,
+  },
+  skeletonChipSmall: {
+    width: 60,
   },
 });
 

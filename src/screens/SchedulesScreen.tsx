@@ -22,6 +22,27 @@ const ICON_SIZE_CHEVRON = 16;
 const ICON_COLOR_AVATAR = '#000000';
 const ICON_COLOR_CHEVRON = '#888';
 
+// Skeleton Loader Component
+const SkeletonListItem = () => (
+  <View style={styles.skeletonItem}>
+    {/* Avatar skeleton */}
+    <View style={styles.skeletonAvatar} />
+    
+    {/* Content skeleton */}
+    <View style={styles.skeletonContent}>
+      {/* Title skeleton */}
+      <View style={styles.skeletonTitle} />
+      
+      {/* Chips skeleton */}
+      <View style={styles.skeletonChips}>
+        <View style={[styles.skeletonChip, styles.skeletonChipLarge]} />
+        <View style={[styles.skeletonChip, styles.skeletonChipMedium]} />
+        <View style={[styles.skeletonChip, styles.skeletonChipSmall]} />
+      </View>
+    </View>
+  </View>
+);
+
 interface SchedulesScreenProps {
   user?: any;
   profile?: Profile;
@@ -47,10 +68,30 @@ const SchedulesScreen: React.FC<SchedulesScreenProps> = ({ user, profile, onCrea
     }
   }, [refreshTrigger]);
 
+  // Auto-cleanup expired schedules every 5 minutes
+  useEffect(() => {
+    const cleanupInterval = setInterval(async () => {
+      try {
+        console.log('🧹 Running automatic cleanup of expired schedules...');
+        await gameService.cleanupExpiredGames();
+        // Reload schedules after cleanup to reflect changes
+        await loadUserSchedules();
+      } catch (error) {
+        console.error('Error during automatic cleanup:', error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(cleanupInterval);
+  }, []);
+
   const loadInitialData = async () => {
     try {
       setLoading(true);
       setError(null);
+      
+      // Clean up expired schedules first
+      console.log('🧹 Cleaning up expired schedules on screen load...');
+      await gameService.cleanupExpiredGames();
       
       // Get current user
       const currentUser = await authService.getCurrentUser();
@@ -148,10 +189,8 @@ const SchedulesScreen: React.FC<SchedulesScreenProps> = ({ user, profile, onCrea
       schedule.skill_level.charAt(0).toUpperCase() + schedule.skill_level.slice(1) : 
       'Unknown';
     
-    // Create location string from venue_name and city (same as HomeScreen)
-    const locationString = schedule.venue_name && schedule.city 
-      ? `${schedule.venue_name} - ${schedule.city}`
-      : (schedule.venue_name || 'No location');
+    // Create location string from venue_name only
+    const locationString = schedule.venue_name || 'No location';
     
     const chips = [
       gameTypeCapitalized,
@@ -215,6 +254,14 @@ const SchedulesScreen: React.FC<SchedulesScreenProps> = ({ user, profile, onCrea
     </View>
   );
 
+  const renderSkeletonLoader = () => (
+    <View style={styles.schedulesListContainer}>
+      {Array.from({ length: 4 }).map((_, index) => (
+        <SkeletonListItem key={index} />
+      ))}
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}>
       <StatusBar barStyle="dark-content" />
@@ -245,21 +292,23 @@ const SchedulesScreen: React.FC<SchedulesScreenProps> = ({ user, profile, onCrea
           />
         </View>
 
-        {/* Your Schedules Section */}
-        <View style={styles.sectionHeaderContainer}>
-          <Text style={styles.sectionTitle}>Your Schedules</Text>
-        </View>
+        {/* Your Schedules Section - Only show when there are schedules or loading/error */}
+        {(loading || error || sortedSchedules.length > 0) && (
+          <>
+            <View style={styles.sectionHeaderContainer}>
+              <Text style={styles.sectionTitle}>Your Schedules</Text>
+            </View>
 
-        {loading ? (
-          renderLoadingState()
-        ) : error ? (
-          renderErrorState()
-        ) : sortedSchedules.length > 0 ? (
-          <View style={styles.schedulesListContainer}>
-            {sortedSchedules.map(renderScheduleItem)}
-          </View>
-        ) : (
-          renderEmptyState()
+            {loading ? (
+              renderSkeletonLoader()
+            ) : error ? (
+              renderErrorState()
+            ) : (
+              <View style={styles.schedulesListContainer}>
+                {sortedSchedules.map(renderScheduleItem)}
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -364,6 +413,52 @@ const styles = StyleSheet.create({
   descriptionSecondLine: {
     ...globalTextStyles.bodySmall,
     opacity: 0.6,
+  },
+  skeletonItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5E9CF',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    minHeight: 80,
+  },
+  skeletonAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.07)',
+    marginRight: 12,
+  },
+  skeletonContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  skeletonTitle: {
+    height: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.07)',
+    borderRadius: 9,
+    marginBottom: 10,
+    width: '70%',
+  },
+  skeletonChips: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  skeletonChip: {
+    height: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.07)',
+    borderRadius: 10,
+  },
+  skeletonChipLarge: {
+    width: 100,
+  },
+  skeletonChipMedium: {
+    width: 80,
+  },
+  skeletonChipSmall: {
+    width: 60,
   },
 });
 

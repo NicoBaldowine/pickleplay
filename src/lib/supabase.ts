@@ -378,7 +378,7 @@ class SupabaseHTTPClient {
           params.set(key, `eq.${value}`);
         }
       });
-      
+
       // Add limit
       if (limit) {
         params.set('limit', limit.toString());
@@ -389,7 +389,7 @@ class SupabaseHTTPClient {
         params.set('order', orderBy);
       }
       
-      url += `?${params.toString()}`;
+        url += `?${params.toString()}`;
       
       console.log(`🔍 Querying Supabase: ${url}`);
       
@@ -421,7 +421,7 @@ class SupabaseHTTPClient {
           }
         });
         console.log(`📡 Retry response status: ${response.status}`);
-      }
+        }
       
       // If still 406, try with minimal headers
       if (response.status === 406) {
@@ -437,14 +437,14 @@ class SupabaseHTTPClient {
       }
       
       if (response.status === 200) {
-        const data = await response.json();
+      const data = await response.json();
         console.log(`✅ Query successful, found ${Array.isArray(data) ? data.length : (data ? 1 : 0)} records`);
-        
+      
         if (single) {
           if (Array.isArray(data) && data.length > 0) {
             return { data: data[0], error: null };
           } else if (!Array.isArray(data) && data) {
-            return { data, error: null };
+      return { data, error: null };
           } else {
             return { data: null, error: { message: 'No rows found', code: 'PGRST116' } };
           }

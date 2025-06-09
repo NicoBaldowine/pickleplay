@@ -22,6 +22,12 @@ export interface GameFilters {
     expert: boolean;
     all: boolean;
   };
+  timeFilter: {
+    soon: boolean;      // 1-2 hours
+    today: boolean;     // within the day
+    thisWeek: boolean;  // this week
+    all: boolean;       // all times
+  };
   radius: number; // in miles
 }
 
@@ -40,6 +46,29 @@ const RADIUS_OPTIONS = [
 
 const FilterScreen: React.FC<FilterScreenProps> = ({ filters: initialFilters, onBack, onApplyFilters }) => {
   const [filters, setFilters] = useState<GameFilters>(initialFilters);
+
+  // Default filters state
+  const defaultFilters: GameFilters = {
+    gameTypes: {
+      singles: true,
+      doubles: true,
+      all: true,
+    },
+    skillLevels: {
+      beginner: true,
+      intermediate: true,
+      advanced: true,
+      expert: true,
+      all: true,
+    },
+    timeFilter: {
+      soon: true,
+      today: true,
+      thisWeek: true,
+      all: true,
+    },
+    radius: 25, // default to 25 miles
+  };
 
   const handleGameTypeToggle = (type: 'singles' | 'doubles' | 'all') => {
     if (type === 'all') {
@@ -124,11 +153,71 @@ const FilterScreen: React.FC<FilterScreenProps> = ({ filters: initialFilters, on
     }
   };
 
+  const handleTimeFilterToggle = (time: keyof GameFilters['timeFilter']) => {
+    if (time === 'all') {
+      // Toggle All - if All is currently selected, deselect everything, otherwise select all
+      const isAllCurrentlySelected = filters.timeFilter.all;
+      setFilters(prev => ({
+        ...prev,
+        timeFilter: {
+          soon: !isAllCurrentlySelected,
+          today: !isAllCurrentlySelected,
+          thisWeek: !isAllCurrentlySelected,
+          all: !isAllCurrentlySelected
+        }
+      }));
+    } else {
+      // Handle individual time selection
+      if (filters.timeFilter.all) {
+        // If "All" is currently selected, deselect "All" and activate ONLY the time clicked
+        setFilters(prev => ({
+          ...prev,
+          timeFilter: {
+            soon: time === 'soon',
+            today: time === 'today',
+            thisWeek: time === 'thisWeek',
+            all: false
+          }
+        }));
+      } else {
+        // Normal toggle behavior when "All" is not selected
+        const newTimeFilter = {
+          ...filters.timeFilter,
+          [time]: !filters.timeFilter[time],
+          all: false
+        };
+        
+        // Check if all individual times are now selected
+        const individualTimes = ['soon', 'today', 'thisWeek'] as const;
+        const allIndividualSelected = individualTimes.every(tm => 
+          tm === time ? !filters.timeFilter[time] : filters.timeFilter[tm]
+        );
+        
+        if (allIndividualSelected) {
+          // If all 3 individual times are selected, activate "All" instead
+          newTimeFilter.soon = true;
+          newTimeFilter.today = true;
+          newTimeFilter.thisWeek = true;
+          newTimeFilter.all = true;
+        }
+        
+        setFilters(prev => ({
+          ...prev,
+          timeFilter: newTimeFilter
+        }));
+      }
+    }
+  };
+
   const handleRadiusSelect = (radius: number) => {
     setFilters(prev => ({
       ...prev,
       radius
     }));
+  };
+
+  const handleReset = () => {
+    setFilters(defaultFilters);
   };
 
   const handleApply = () => {
@@ -171,6 +260,8 @@ const FilterScreen: React.FC<FilterScreenProps> = ({ filters: initialFilters, on
         title="Filters"
         leftIcon={<ArrowLeft size={24} color="#000000" />}
         onLeftIconPress={onBack}
+        rightIcon={<Text style={styles.resetButtonText}>Reset</Text>}
+        onRightIconPress={handleReset}
         style={styles.topBar}
         titleContainerStyle={styles.titleContainer}
         titleStyle={styles.titleStyle}
@@ -225,6 +316,32 @@ const FilterScreen: React.FC<FilterScreenProps> = ({ filters: initialFilters, on
               'All',
               filters.skillLevels.all,
               () => handleSkillLevelToggle('all')
+            )}
+          </View>
+        ))}
+
+        {/* Time Filter Section */}
+        {renderSection('Time', (
+          <View style={styles.chipsContainer}>
+            {renderChip(
+              'Soon',
+              filters.timeFilter.soon && !filters.timeFilter.all,
+              () => handleTimeFilterToggle('soon')
+            )}
+            {renderChip(
+              'Today',
+              filters.timeFilter.today && !filters.timeFilter.all,
+              () => handleTimeFilterToggle('today')
+            )}
+            {renderChip(
+              'This Week',
+              filters.timeFilter.thisWeek && !filters.timeFilter.all,
+              () => handleTimeFilterToggle('thisWeek')
+            )}
+            {renderChip(
+              'All',
+              filters.timeFilter.all,
+              () => handleTimeFilterToggle('all')
             )}
           </View>
         ))}
@@ -301,10 +418,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   chip: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 100,
-    minWidth: 80,
+    minWidth: 70,
     alignItems: 'center',
   },
   chipSelected: {
@@ -314,7 +431,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.07)',
   },
   chipText: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'InterTight-ExtraBold',
     fontWeight: '800',
   },
@@ -340,6 +457,12 @@ const styles = StyleSheet.create({
     fontFamily: 'InterTight-ExtraBold',
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  resetButtonText: {
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#000000',
   },
 });
 

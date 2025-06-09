@@ -12,9 +12,12 @@ import {
   ScrollView,
   TouchableWithoutFeedback,
   Keyboard,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft } from 'lucide-react-native';
+import { COLORS } from '../../constants/colors';
+import TopBar from '../../components/ui/TopBar';
 import { authService } from '../../services/authService';
 
 interface ForgotPasswordScreenProps {
@@ -49,16 +52,8 @@ export default function ForgotPasswordScreen({ onBack, onEmailSent }: ForgotPass
       const result = await authService.resetPassword(email.trim());
       
       if (result.success) {
-        Alert.alert(
-          'Email Sent!',
-          'Check your inbox for the password reset link. It may take a few minutes to arrive.',
-          [
-            {
-              text: 'OK',
-              onPress: () => onEmailSent(email.trim())
-            }
-          ]
-        );
+        console.log('✅ Password reset email sent successfully');
+        onEmailSent(email.trim());
       } else {
         Alert.alert('Error', result.error || 'Failed to send reset email');
       }
@@ -73,72 +68,62 @@ export default function ForgotPasswordScreen({ onBack, onEmailSent }: ForgotPass
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <SafeAreaView style={styles.container}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardView}
+        <StatusBar barStyle="dark-content" />
+        
+        {/* Header */}
+        <TopBar
+          title=""
+          leftIcon={<ArrowLeft size={24} color={COLORS.TEXT_PRIMARY} />}
+          onLeftIconPress={onBack}
+          style={styles.topBar}
+        />
+
+        <ScrollView 
+          style={styles.scrollContent} 
+          contentContainerStyle={styles.scrollContentContainer}
+          showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={onBack} style={styles.backButton}>
-              <ArrowLeft size={24} color="#333" />
-            </TouchableOpacity>
+          {/* Title Section */}
+          <View style={styles.titleSection}>
+            <Text style={styles.title}>Forgot Password</Text>
           </View>
 
-          <ScrollView
-            style={styles.scrollContent}
-            contentContainerStyle={styles.scrollContentContainer}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Title Section */}
-            <View style={styles.titleSection}>
-              <Text style={styles.title}>Forgot Password</Text>
-              <Text style={styles.subtitle}>
-                Enter your email address and we'll send you a link to reset your password
-              </Text>
-            </View>
-
-            {/* Email Input */}
+          {/* Form Section */}
+          <View style={styles.formSection}>
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Email Address</Text>
+              <Text style={styles.inputLabel}>Email</Text>
               <TextInput
                 style={styles.textInput}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="Enter your email"
-                placeholderTextColor="#999"
+                placeholder=""
+                placeholderTextColor={COLORS.TEXT_SECONDARY}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!isLoading}
               />
             </View>
-
-            {/* Info Message */}
-            <View style={styles.infoContainer}>
-              <Text style={styles.infoText}>
-                If an account exists with this email, you'll receive a password reset link
-              </Text>
-            </View>
-          </ScrollView>
-
-          {/* Bottom Button */}
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={[
-                styles.sendButton,
-                (!email.trim() || isLoading) && styles.disabledButton
-              ]}
-              onPress={handleSendResetEmail}
-              disabled={!email.trim() || isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text style={styles.sendButtonText}>Send Reset Email</Text>
-              )}
-            </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
+        </ScrollView>
+
+        {/* Bottom Button */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              (!email.trim() || isLoading) && styles.disabledButton
+            ]}
+            onPress={handleSendResetEmail}
+            disabled={!email.trim() || isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.sendButtonText}>Send Reset Email</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     </TouchableWithoutFeedback>
   );
@@ -147,94 +132,73 @@ export default function ForgotPasswordScreen({ onBack, onEmailSent }: ForgotPass
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEF2D6',
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
   },
-  keyboardView: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 10,
-  },
-  backButton: {
-    padding: 8,
-    alignSelf: 'flex-start',
+  topBar: {
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     flex: 1,
   },
   scrollContentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 120,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 120, // Space for fixed button
   },
   titleSection: {
-    marginBottom: 40,
+    marginBottom: 32,
   },
   title: {
-    fontSize: 34,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
+    fontSize: 28,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    lineHeight: 22,
+  formSection: {
+    gap: 24,
   },
   inputContainer: {
-    marginBottom: 20,
+    gap: 8,
   },
   inputLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: COLORS.TEXT_PRIMARY,
   },
   textInput: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     fontSize: 16,
     color: '#333',
-    borderWidth: 1,
-    borderColor: '#E5E5E7',
-  },
-  infoContainer: {
-    backgroundColor: '#F0F8FF',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 20,
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#4A5568',
-    lineHeight: 20,
-    textAlign: 'center',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
   },
   buttonContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FEF2D6',
-    paddingHorizontal: 20,
-    paddingVertical: 30,
-    paddingBottom: 40,
+    backgroundColor: COLORS.BACKGROUND_PRIMARY,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingBottom: 48,
   },
   sendButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
+    backgroundColor: COLORS.TEXT_PRIMARY,
+    borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
   },
   disabledButton: {
-    backgroundColor: '#E5E5E7',
+    opacity: 0.5,
   },
   sendButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 }); 

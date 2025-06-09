@@ -110,7 +110,7 @@ class CourtsService {
   /**
    * Get all courts (regardless of city)
    */
-  async getAllCourts(): Promise<Court[]> {
+  async getAllCourts(includeDistance: boolean = false): Promise<Court[]> {
     try {
       console.log('🏟️ Fetching all courts');
       
@@ -124,13 +124,26 @@ class CourtsService {
         throw result.error;
       }
 
-      const courts = result.data || [];
+      let courts = result.data || [];
       console.log(`✅ Found ${courts.length} total courts`);
+
+      // Add distance calculations if requested
+      if (includeDistance) {
+        courts = await this.addDistancesToCourts(courts);
+      }
+
       return courts;
     } catch (error) {
       console.error('Error fetching all courts:', error);
       throw error;
     }
+  }
+
+  /**
+   * Get all courts with distance calculation and sorting by proximity
+   */
+  async getAllCourtsWithDistance(): Promise<Court[]> {
+    return this.getAllCourts(true);
   }
 
   /**

@@ -1,117 +1,79 @@
-import React, { useState, useCallback, memo } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  StatusBar,
-  SafeAreaView,
   TextInput,
+  Alert,
+  ActivityIndicator,
   ScrollView,
   TouchableWithoutFeedback,
   Keyboard,
-  Alert,
-  ActivityIndicator,
-  Linking,
+  StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react-native';
-import { authService } from '../../services/authService';
 import { COLORS } from '../../constants/colors';
 import TopBar from '../../components/ui/TopBar';
+import { authService } from '../../services/authService';
 
-interface SignUpScreenProps {
+interface SetNewPasswordScreenProps {
   onBack: () => void;
-  onSignUp: (email: string, password: string) => void;
-  onGoogleSignUp: () => void;
-  onLoginPress?: () => void;
-  onEmailVerificationRequired: (email: string, password: string) => void;
+  onPasswordUpdated: () => void;
 }
 
-const SignUpScreen: React.FC<SignUpScreenProps> = memo(({ 
-  onBack, 
-  onSignUp, 
-  onGoogleSignUp,
-  onLoginPress,
-  onEmailVerificationRequired
-}) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+export default function SetNewPasswordScreen({ onBack, onPasswordUpdated }: SetNewPasswordScreenProps) {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
-  const handleSignUp = useCallback(async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Missing Information', 'Please enter both email and password.');
+  const isPasswordValid = newPassword.length >= 6;
+  const doPasswordsMatch = newPassword === confirmPassword && confirmPassword.length > 0;
+  const isFormValid = isPasswordValid && doPasswordsMatch;
+
+  const handleSetNewPassword = async () => {
+    if (!isFormValid) return;
+
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Password Mismatch', 'Passwords do not match. Please try again.');
       return;
     }
 
-    if (password.length < 6) {
+    if (newPassword.length < 6) {
       Alert.alert('Weak Password', 'Password must be at least 6 characters long.');
       return;
     }
 
     try {
       setIsLoading(true);
-      console.log('🚀 Attempting to create account:', email);
+      console.log('🔐 Updating password...');
       
-      // First check if email already exists
-      const emailExists = await authService.checkEmailExists(email.trim());
+      const result = await authService.updatePassword(newPassword);
       
-      if (emailExists) {
-        console.log('❌ Email already exists:', email);
-        Alert.alert(
-          'Email Already Registered',
-          'An account with this email already exists. Would you like to log in instead?',
-          [
-            {
-              text: 'Cancel',
-              style: 'cancel'
-            },
-            {
-              text: 'Go to Login',
-              onPress: () => {
-                console.log('🔄 Redirecting to login');
-                if (onLoginPress) {
-                  onLoginPress();
-                }
-              }
-            }
-          ]
-        );
-        setIsLoading(false);
-        return;
-      }
-      
-      // Email doesn't exist, proceed with signup
-      const response = await authService.signUp(email.trim(), password.trim(), {
-        email: email.trim(),
-        name: '',
-        lastname: '',
-        level: ''
-      });
-      
-      if (response.success) {
-        // Account created, proceed to verification
-        console.log('✅ Account created, proceeding to email verification');
-        onEmailVerificationRequired(email.trim(), password.trim());
+      if (result.success) {
+        console.log('✅ Password updated successfully');
+        onPasswordUpdated();
       } else {
-        // Handle error
-        Alert.alert('Sign Up Failed', response.error || 'Failed to create account');
+        Alert.alert('Error', result.error || 'Failed to update password');
       }
-      
-    } catch (error: any) {
-      console.error('Signup error:', error);
-      Alert.alert('Error', 'Failed to create account. Please try again.');
+    } catch (error) {
+      console.error('Password update error:', error);
+      Alert.alert('Error', 'Failed to update password. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [email, password, onEmailVerificationRequired, onLoginPress]);
+  };
 
-  const togglePasswordVisibility = useCallback(() => {
-    setShowPassword(prev => !prev);
-  }, []);
+  const toggleNewPasswordVisibility = () => {
+    setShowNewPassword(!showNewPassword);
+  };
 
-  const isFormValid = email.trim().length > 0 && password.trim().length >= 6;
+  const toggleConfirmPasswordVisibility = () => {
+    setShowConfirmPassword(!showConfirmPassword);
+  };
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -133,89 +95,95 @@ const SignUpScreen: React.FC<SignUpScreenProps> = memo(({
         >
           {/* Title Section */}
           <View style={styles.titleSection}>
-            <Text style={styles.title}>Create an account</Text>
+            <Text style={styles.title}>Set new password</Text>
           </View>
 
           {/* Form Section */}
           <View style={styles.formSection}>
+            {/* New Password */}
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Email</Text>
-              <TextInput
-                style={styles.textInput}
-                value={email}
-                onChangeText={setEmail}
-                placeholder=""
-                placeholderTextColor={COLORS.TEXT_SECONDARY}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Password</Text>
+              <Text style={styles.inputLabel}>New Password</Text>
               <View style={styles.passwordInputContainer}>
                 <TextInput
                   style={[styles.textInput, styles.passwordInput]}
-                  value={password}
-                  onChangeText={setPassword}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
                   placeholder=""
                   placeholderTextColor={COLORS.TEXT_SECONDARY}
-                  secureTextEntry={!showPassword}
+                  secureTextEntry={!showNewPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  editable={!isLoading}
                 />
                 <TouchableOpacity 
                   style={styles.eyeButton} 
-                  onPress={togglePasswordVisibility}
+                  onPress={toggleNewPasswordVisibility}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  {showPassword ? (
+                  {showNewPassword ? (
                     <EyeOff size={20} color={COLORS.TEXT_SECONDARY} />
                   ) : (
                     <Eye size={20} color={COLORS.TEXT_SECONDARY} />
                   )}
                 </TouchableOpacity>
               </View>
+              {newPassword.length > 0 && newPassword.length < 6 && (
+                <Text style={styles.errorText}>Password must be at least 6 characters</Text>
+              )}
+            </View>
+
+            {/* Confirm Password */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Confirm Password</Text>
+              <View style={styles.passwordInputContainer}>
+                <TextInput
+                  style={[styles.textInput, styles.passwordInput]}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder=""
+                  placeholderTextColor={COLORS.TEXT_SECONDARY}
+                  secureTextEntry={!showConfirmPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
+                <TouchableOpacity 
+                  style={styles.eyeButton} 
+                  onPress={toggleConfirmPasswordVisibility}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff size={20} color={COLORS.TEXT_SECONDARY} />
+                  ) : (
+                    <Eye size={20} color={COLORS.TEXT_SECONDARY} />
+                  )}
+                </TouchableOpacity>
+              </View>
+              {confirmPassword.length > 0 && !doPasswordsMatch && (
+                <Text style={styles.errorText}>Passwords do not match</Text>
+              )}
             </View>
           </View>
         </ScrollView>
 
         {/* Bottom Button */}
         <View style={styles.buttonContainer}>
-          <Text style={styles.termsText}>
-            by continuing you accept our{' '}
-            <Text 
-              style={styles.linkText} 
-              onPress={() => Linking.openURL('https://www.itsversus.app/terms')}
-            >
-              terms
-            </Text>
-            {' '}and{' '}
-            <Text 
-              style={styles.linkText} 
-              onPress={() => Linking.openURL('https://www.itsversus.app/privacy')}
-            >
-              privacy policy
-            </Text>
-          </Text>
-          
           <TouchableOpacity 
             style={[
-              styles.continueButton, 
+              styles.setPasswordButton, 
               (!isFormValid || isLoading) && styles.disabledButton
             ]} 
-            onPress={handleSignUp}
+            onPress={handleSetNewPassword}
             disabled={!isFormValid || isLoading}
           >
             {isLoading ? (
               <ActivityIndicator color="white" />
             ) : (
               <Text style={[
-                styles.continueButtonText, 
+                styles.setPasswordButtonText, 
                 (!isFormValid || isLoading) && styles.disabledButtonText
               ]}>
-                Continue
+                Set New Password
               </Text>
             )}
           </TouchableOpacity>
@@ -223,9 +191,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = memo(({
       </SafeAreaView>
     </TouchableWithoutFeedback>
   );
-});
-
-SignUpScreen.displayName = 'SignUpScreen';
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -286,6 +252,12 @@ const styles = StyleSheet.create({
     top: '50%',
     transform: [{ translateY: -10 }], // Half of icon size
   },
+  errorText: {
+    fontSize: 14,
+    color: '#FF3B30',
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
+  },
   buttonContainer: {
     position: 'absolute',
     bottom: 0,
@@ -296,7 +268,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingBottom: 48,
   },
-  continueButton: {
+  setPasswordButton: {
     backgroundColor: COLORS.TEXT_PRIMARY,
     borderRadius: 100,
     paddingVertical: 16,
@@ -305,7 +277,7 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.5,
   },
-  continueButtonText: {
+  setPasswordButtonText: {
     fontSize: 16,
     fontFamily: 'InterTight-ExtraBold',
     fontWeight: '800',
@@ -314,21 +286,4 @@ const styles = StyleSheet.create({
   disabledButtonText: {
     opacity: 0.7,
   },
-  termsText: {
-    fontSize: 12,
-    fontFamily: 'InterTight-Medium',
-    fontWeight: '500',
-    color: COLORS.TEXT_SECONDARY,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  linkText: {
-    fontSize: 12,
-    fontFamily: 'InterTight-Medium',
-    fontWeight: '500',
-    color: COLORS.TEXT_PRIMARY,
-    textDecorationLine: 'underline',
-  },
-});
-
-export default SignUpScreen; 
+}); 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, StatusBar, ActivityIndicator, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, StatusBar, ActivityIndicator, RefreshControl, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, Calendar, SlidersHorizontal } from 'lucide-react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -31,6 +31,12 @@ const defaultFilters: GameFilters = {
     intermediate: true,
     advanced: true,
     expert: true,
+    all: true,
+  },
+  timeFilter: {
+    soon: true,
+    today: true,
+    thisWeek: true,
     all: true,
   },
   radius: 25, // default to 25 miles
@@ -88,10 +94,30 @@ const SearchScreen: React.FC = () => {
     applyFilters();
   }, [games, filters]);
 
+  // Auto-cleanup expired games every 5 minutes
+  useEffect(() => {
+    const cleanupInterval = setInterval(async () => {
+      try {
+        console.log('🧹 Running automatic cleanup of expired games in Search...');
+        await gameService.cleanupExpiredGames();
+        // Reload games after cleanup to reflect changes
+        await loadAvailableGames();
+      } catch (error) {
+        console.error('Error during automatic cleanup:', error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(cleanupInterval);
+  }, []);
+
   const loadInitialData = async () => {
     try {
       setLoading(true);
       setError(null);
+      
+      // Clean up expired games first
+      console.log('🧹 Cleaning up expired games on search screen load...');
+      await gameService.cleanupExpiredGames();
       
       // Get current user to exclude their games
       const currentUser = await authService.getCurrentUser();
@@ -163,6 +189,49 @@ const SearchScreen: React.FC = () => {
       }
     }
 
+    // Filter by time
+    if (filters.timeFilter.all) {
+      // If "All" is selected, show all time ranges
+      // No filtering needed, show all times
+    } else {
+      const now = new Date();
+      const currentTime = now.getTime();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const todayEnd = todayStart + (24 * 60 * 60 * 1000) - 1; // End of today
+      const weekStart = todayStart;
+      const weekEnd = weekStart + (7 * 24 * 60 * 60 * 1000) - 1; // End of this week
+      
+      filtered = filtered.filter(game => {
+        const gameDateTime = new Date(`${game.scheduled_date}T${game.scheduled_time}`).getTime();
+        
+        // Check if game matches any selected time filter
+        if (filters.timeFilter.soon) {
+          // Soon: 1-2 hours from now
+          const soonStart = currentTime + (1 * 60 * 60 * 1000); // 1 hour from now
+          const soonEnd = currentTime + (2 * 60 * 60 * 1000);   // 2 hours from now
+          if (gameDateTime >= soonStart && gameDateTime <= soonEnd) {
+            return true;
+          }
+        }
+        
+        if (filters.timeFilter.today) {
+          // Today: within the day
+          if (gameDateTime >= todayStart && gameDateTime <= todayEnd) {
+            return true;
+          }
+        }
+        
+        if (filters.timeFilter.thisWeek) {
+          // This week: within 7 days
+          if (gameDateTime >= weekStart && gameDateTime <= weekEnd) {
+            return true;
+          }
+        }
+        
+        return false; // Game doesn't match any selected time filter
+      });
+    }
+
     // TODO: Filter by distance when location services are implemented
     // This will require getting the user's current location and calculating
     // distance to each game's location
@@ -230,7 +299,7 @@ const SearchScreen: React.FC = () => {
     // Create chips array with player name, level, and simplified location
     const chips: string[] = [
       displayName,
-      game.skill_level,
+      game.skill_level.charAt(0).toUpperCase() + game.skill_level.slice(1), // Capitalize first letter
       game.venue_name // Only venue name, no address or city
     ];
     
@@ -241,10 +310,38 @@ const SearchScreen: React.FC = () => {
       'rgba(0, 0, 0, 0.07)', // Location chip (default)
     ];
 
-    // Always use Search icon
-    const avatarIcon = (
-      <Search size={ICON_SIZE_AVATAR} color={ICON_COLOR_AVATAR} />
-    );
+    // Use creator or partner avatar for doubles games
+    const getAvatarIcon = () => {
+      if (game.game_type === 'doubles' && game.creator_partner?.avatar_url) {
+        // For doubles games, use partner avatar if available (represents the dupla)
+        console.log(`🖼️ SearchScreen: Using partner avatar for doubles game ${game.id}:`, game.creator_partner.avatar_url);
+        return (
+          <View style={styles.avatarContainer}>
+            <Image
+              source={{ uri: game.creator_partner.avatar_url }}
+              style={styles.avatarImage}
+            />
+          </View>
+        );
+      } else if (game.creator?.avatar_url) {
+        // Use creator avatar for singles or doubles without partner photo
+        console.log(`👤 SearchScreen: Using creator avatar for game ${game.id}:`, game.creator.avatar_url);
+        return (
+          <View style={styles.avatarContainer}>
+            <Image
+              source={{ uri: game.creator.avatar_url }}
+              style={styles.avatarImage}
+            />
+          </View>
+        );
+      } else {
+        // Fallback to Search icon
+        console.log(`🔍 SearchScreen: Using search icon fallback for game ${game.id}`);
+        return <Search size={ICON_SIZE_AVATAR} color={ICON_COLOR_AVATAR} />;
+      }
+    };
+
+    const avatarIcon = getAvatarIcon();
 
     return (
       <ListItem
@@ -457,6 +554,17 @@ const styles = StyleSheet.create({
   },
   skeletonChipSmall: {
     width: 60,
+  },
+  avatarContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
   },
 });
 

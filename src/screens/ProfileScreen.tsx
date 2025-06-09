@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert, StatusBar, KeyboardAvoidingView, Platform, Image, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert, StatusBar, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, ChevronDown, Check, Camera } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -50,6 +50,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ profile, user, onBack, on
   const [avatarUri, setAvatarUri] = useState<string | undefined>(profile.avatar_url);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
+  // Shimmer animation
+  const shimmerAnimation = useRef(new Animated.Value(0)).current;
+
   // Log initial avatar state
   console.log('🖼️ Initial avatar state:', {
     profileAvatarUrl: profile.avatar_url,
@@ -61,6 +64,47 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ profile, user, onBack, on
   useEffect(() => {
     console.log('🔄 avatarUri state changed to:', avatarUri);
   }, [avatarUri]);
+
+  // Start shimmer animation
+  useEffect(() => {
+    const startShimmer = () => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerAnimation, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shimmerAnimation, {
+            toValue: 0,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    };
+
+    startShimmer();
+  }, [shimmerAnimation]);
+
+  // Shimmer component
+  const SkeletonShimmer = () => {
+    const translateX = shimmerAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [-80, 80],
+    });
+
+    return (
+      <Animated.View 
+        style={[
+          styles.skeletonShimmer,
+          {
+            transform: [{ translateX }],
+          },
+        ]} 
+      />
+    );
+  };
 
   // Function to get the best available user ID
   const getBestUserId = (): string | null => {
@@ -477,19 +521,22 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ profile, user, onBack, on
         >
           {/* Avatar Section */}
           <View style={styles.avatarSection}>
-            <Text style={styles.inputLabel}>Profile Picture</Text>
             <TouchableOpacity 
               style={styles.avatarContainer}
               onPress={handleAvatarPress}
               disabled={isUploadingAvatar}
             >
               {isUploadingAvatar ? (
-                <View style={styles.avatarPlaceholder}>
+                <View style={[styles.avatarPlaceholder, styles.avatarSkeleton]}>
                   <ActivityIndicator size="large" color="#000000" />
                   <Text style={styles.uploadingText}>Uploading...</Text>
                 </View>
               ) : avatarUri ? (
                 <View style={styles.avatarWrapper}>
+                  <View style={[styles.avatarPlaceholder, styles.avatarSkeleton]}>
+                    {/* Skeleton background while image loads */}
+                    <SkeletonShimmer />
+                  </View>
                   <Image 
                     key={avatarUri}
                     source={{ uri: avatarUri }} 
@@ -509,16 +556,16 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ profile, user, onBack, on
                     }}
                   />
                   <View style={styles.cameraOverlay}>
-                    <Camera size={16} color="#FFFFFF" />
+                    <Camera size={20} color="#FFFFFF" />
                   </View>
                 </View>
               ) : (
-                <View style={styles.avatarPlaceholder}>
+                <View style={[styles.avatarPlaceholder, styles.avatarSkeleton]}>
                   <Text style={styles.avatarInitials}>
                     {firstName.charAt(0)}{lastName.charAt(0)}
                   </Text>
                   <View style={styles.cameraOverlay}>
-                    <Camera size={16} color="#FFFFFF" />
+                    <Camera size={20} color="#FFFFFF" />
                   </View>
                 </View>
               )}
@@ -572,17 +619,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ profile, user, onBack, on
                 {getSelectedLevelLabel()}
               </Text>
               <ChevronDown size={18} color="#888" />
-            </TouchableOpacity>
-          </View>
-
-          {/* TEMPORARY DEBUG SECTION */}
-          <View style={styles.debugSection}>
-            <Text style={styles.debugTitle}>🐛 Debug Permissions</Text>
-            <TouchableOpacity 
-              style={styles.debugButton}
-              onPress={requestPermissions}
-            >
-              <Text style={styles.debugButtonText}>Test Permissions</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -789,19 +825,22 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    zIndex: 2,
   },
   cameraOverlay: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    bottom: -2,
+    right: -2,
     backgroundColor: '#000000',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
+    borderRadius: 16,
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    zIndex: 3,
   },
   avatarPlaceholder: {
     width: 80,
@@ -825,28 +864,20 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginTop: 8,
   },
-  debugSection: {
-    marginBottom: 24,
-    alignItems: 'center',
+  avatarSkeleton: {
+    backgroundColor: '#F5E9CF',
+    overflow: 'hidden',
   },
-  debugTitle: {
-    fontSize: 16,
-    fontFamily: 'InterTight-ExtraBold',
-    fontWeight: '800',
-    color: '#000000',
-    marginBottom: 8,
-  },
-  debugButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
-  },
-  debugButtonText: {
-    fontSize: 16,
-    color: '#000000',
+  skeletonShimmer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 40,
+    width: 20,
+    height: '100%',
   },
 });
 

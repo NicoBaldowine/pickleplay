@@ -11,10 +11,12 @@ import {
   Keyboard,
   Alert,
 } from 'react-native';
-import { ArrowLeft, X, Calendar, Clock } from 'lucide-react-native';
+import { ArrowLeft, X, Calendar, Clock, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import DateTimePicker, {
   DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
+import UIDateTimePicker from 'react-native-ui-datepicker';
+import dayjs from 'dayjs';
 import ListItem from '../ui/ListItem';
 import { globalTextStyles } from '../../styles/globalStyles';
 import { COLORS } from '../../constants/colors';
@@ -63,7 +65,7 @@ const ScheduleStep: React.FC<ScheduleStepProps> = ({
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-  const [tempDate, setTempDate] = useState(new Date());
+  const [tempDate, setTempDate] = useState(dayjs(new Date()));
   const [tempTime, setTempTime] = useState(new Date());
 
   // Helper function to check if selected time is in the past
@@ -141,23 +143,46 @@ const ScheduleStep: React.FC<ScheduleStepProps> = ({
   };
 
   const handleOpenDatePickerIOS = () => {
-    setTempDate(new Date(date));
+    setTempDate(dayjs(date));
     setShowDatePicker(true);
   };
-  const onTempDateChangeIOS = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    const currentDate = selectedDate || tempDate;
-    setTempDate(currentDate);
-  };
-  const confirmDateIOS = () => {
-    setDate(new Date(tempDate));
+
+  const handleDateChange = (params: any) => {
+    console.log('📅 Date selected params:', params);
+    // The library returns { date: dayjs_object } for single mode
+    const selectedDate = params?.date || params;
+    console.log('📅 Processing date:', selectedDate);
     
-    // If we selected today and current time is in the past, update time to valid minimum
-    const minimumTime = getMinimumTimeForDate(tempDate);
-    if (minimumTime && isTimeInPast(tempDate, time)) {
-      setTime(minimumTime);
+    if (selectedDate) {
+      setTempDate(dayjs(selectedDate));
     }
-    
-    setShowDatePicker(false);
+  };
+
+  const confirmDateIOS = () => {
+    try {
+      const selectedDate = tempDate.toDate();
+      console.log('📅 Confirming date:', selectedDate);
+      
+      if (selectedDate && !isNaN(selectedDate.getTime())) {
+        setDate(selectedDate);
+        
+        // If we selected today and current time is in the past, update time to valid minimum
+        const minimumTime = getMinimumTimeForDate(selectedDate);
+        if (minimumTime && isTimeInPast(selectedDate, time)) {
+          setTime(minimumTime);
+        }
+      } else {
+        console.error('❌ Invalid date selected');
+        // Fallback to today
+        setDate(new Date());
+      }
+      
+      setShowDatePicker(false);
+    } catch (error) {
+      console.error('❌ Error confirming date:', error);
+      setDate(new Date());
+      setShowDatePicker(false);
+    }
   };
 
   const handleOpenTimePickerIOS = () => {
@@ -288,10 +313,10 @@ const ScheduleStep: React.FC<ScheduleStepProps> = ({
           </Text>
 
           <ListItem
-            title="Select Date"
+            title="Select Day"
             chips={[date.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })]}
             chipBackgrounds={['rgba(0, 0, 0, 0.07)']}
-            onPress={Platform.OS === 'ios' ? handleOpenDatePickerIOS : () => setShowDatePicker(true)}
+            onPress={handleOpenDatePickerIOS}
             avatarIcon={<Calendar size={ICON_SIZE_AVATAR} color="#000000" />}
             style={styles.listItem}
           />
@@ -342,38 +367,108 @@ const ScheduleStep: React.FC<ScheduleStepProps> = ({
         )}
 
         {/* Date Selection Modal */}
-        {Platform.OS === 'ios' && (
-          <Modal
-            transparent={true}
-            animationType="fade"
-            visible={showDatePicker}
-            onRequestClose={() => setShowDatePicker(false)}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Select Date</Text>
-                <DateTimePicker
-                  testID="datePickerIOS"
-                  value={tempDate} 
-                  mode="date"
-                  display="spinner"
-                  onChange={onTempDateChangeIOS}
-                  minimumDate={new Date()}
-                  style={styles.iosPicker}
-                  textColor="#000000"
-                />
-                <View style={styles.modalButtonContainer}>
-                  <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.modalButton}>
-                    <Text style={[styles.modalButtonText, styles.cancelButtonText]}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={confirmDateIOS} style={styles.modalButton}>
-                    <Text style={[styles.modalButtonText, styles.okButtonText]}>OK</Text>
-                  </TouchableOpacity>
-                </View>
+        <Modal
+          transparent={true}
+          animationType="fade"
+          visible={showDatePicker}
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.calendarModalContent}>
+              <Text style={styles.modalTitle}>Select Day</Text>
+              <UIDateTimePicker
+                mode="single"
+                date={tempDate}
+                onChange={handleDateChange}
+                locale="en"
+                minDate={dayjs()}
+                containerHeight={220}
+                components={{
+                  IconPrev: <ChevronLeft size={20} color="#000000" />,
+                  IconNext: <ChevronRight size={20} color="#000000" />
+                }}
+                styles={{
+                  selected: {
+                    backgroundColor: '#000000',
+                    borderRadius: 12,
+                    aspectRatio: 1,
+                    width: 24,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    padding: 0
+                  },
+                  selected_label: {
+                    color: '#FFFFFF',
+                    fontFamily: 'InterTight-ExtraBold',
+                    fontWeight: '800',
+                    fontSize: 12,
+                    includeFontPadding: false,
+                    textAlign: 'center'
+                  },
+                  today: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.07)',
+                    borderRadius: 12,
+                    aspectRatio: 1,
+                    width: 24,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    padding: 0
+                  },
+                  today_label: {
+                    color: '#000000',
+                    fontFamily: 'InterTight-ExtraBold',
+                    fontWeight: '800',
+                    fontSize: 12,
+                    includeFontPadding: false,
+                    textAlign: 'center'
+                  },
+                  day: {
+                    color: '#000000',
+                    fontFamily: 'InterTight-ExtraBold',
+                    fontWeight: '800',
+                    fontSize: 12,
+                    aspectRatio: 1,
+                    width: 24,
+                    textAlign: 'center',
+                    includeFontPadding: false,
+                    paddingVertical: 0
+                  },
+                  disabled: {
+                    backgroundColor: 'transparent'
+                  },
+                  disabled_label: {
+                    color: '#CCCCCC',
+                    fontFamily: 'Inter-Regular',
+                    fontWeight: '400',
+                    fontSize: 12,
+                    includeFontPadding: false,
+                    textAlign: 'center'
+                  },
+                  header: {
+                    color: '#000000',
+                    fontFamily: 'InterTight-ExtraBold',
+                    fontWeight: '800',
+                    fontSize: 18
+                  },
+                  weekday: {
+                    color: '#666666',
+                    fontFamily: 'InterTight-ExtraBold',
+                    fontWeight: '800',
+                    fontSize: 14
+                  }
+                }}
+              />
+              <View style={styles.modalButtonContainer}>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.modalButton}>
+                  <Text style={[styles.modalButtonText, styles.cancelButtonText]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={confirmDateIOS} style={styles.modalButton}>
+                  <Text style={[styles.modalButtonText, styles.okButtonText]}>Select</Text>
+                </TouchableOpacity>
               </View>
             </View>
-          </Modal>
-        )}
+          </View>
+        </Modal>
 
         {/* Time Selection Modal */}
         {Platform.OS === 'ios' && (
@@ -496,6 +591,21 @@ const styles = StyleSheet.create({
     padding: 20,
     width: '100%',
     maxWidth: 350,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  calendarModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxWidth: 380,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,

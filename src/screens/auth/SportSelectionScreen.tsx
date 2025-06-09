@@ -80,7 +80,7 @@ const SportSelectionScreen: React.FC<SportSelectionScreenProps> = ({ onBack, onS
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {/* Title */}
         <Text style={styles.title}>Select your sport</Text>
-
+        
         {/* Sports List */}
         <View style={styles.sportsList}>
           {SPORTS.map((sport) => {

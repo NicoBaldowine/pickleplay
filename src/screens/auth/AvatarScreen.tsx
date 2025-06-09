@@ -18,10 +18,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../constants/colors';
 import { createAvatarsBucket } from '../../utils/createAvatarsBucket';
 import { supabaseClient } from '../../lib/supabase';
+import { authService } from '../../services/authService';
 
 interface AvatarScreenProps {
   onBack: () => void;
-  onAvatarComplete: (imageUri: string) => Promise<void>;
+  onAvatarComplete?: (imageUri: string) => Promise<void>;
+  onAvatarSkipped?: () => void;
   userData: {
     name: string;
     lastname: string;
@@ -29,7 +31,7 @@ interface AvatarScreenProps {
   };
 }
 
-const AvatarScreen: React.FC<AvatarScreenProps> = ({ onBack, onAvatarComplete, userData }) => {
+const AvatarScreen: React.FC<AvatarScreenProps> = ({ onBack, onAvatarComplete, onAvatarSkipped, userData }) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
@@ -65,30 +67,33 @@ const AvatarScreen: React.FC<AvatarScreenProps> = ({ onBack, onAvatarComplete, u
 
       console.log('✅ Proceeding with upload using available token');
 
-      // Convert image to blob
+      // Convert image to base64
       const response = await fetch(imageUri);
-      const blob = await response.blob();
+      const arrayBuffer = await response.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
       
-      // Generate unique filename
-      const fileExt = imageUri.split('.').pop() || 'jpg';
+      // Generate unique filename with proper extension
+      let fileExt = imageUri.split('.').pop() || 'jpg';
+      // Fix MIME type issue - use jpeg instead of jpg
+      if (fileExt === 'jpg') fileExt = 'jpeg';
+      
       const fileName = `avatar_${Date.now()}.${fileExt}`;
       const filePath = `${fileName}`;
 
       console.log('📂 Uploading to path:', filePath);
+      console.log('📊 File size:', uint8Array.length, 'bytes');
+      console.log('🎯 Content-Type:', `image/${fileExt}`);
 
-      // Create form data
-      const formData = new FormData();
-      formData.append('file', blob as any, fileName);
-
-      // Upload to Supabase Storage
+      // Upload to Supabase Storage using binary data
       const uploadResponse = await fetch(
         'https://bcndbqnimzyxuqcayxqn.supabase.co/storage/v1/object/avatars/' + filePath,
         {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': `image/${fileExt}`,
           },
-          body: formData,
+          body: uint8Array,
         }
       );
 
@@ -116,8 +121,9 @@ const AvatarScreen: React.FC<AvatarScreenProps> = ({ onBack, onAvatarComplete, u
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${accessToken}`,
+                  'Content-Type': `image/${fileExt}`,
                 },
-                body: formData,
+                body: uint8Array,
               }
             );
 
@@ -240,47 +246,55 @@ const AvatarScreen: React.FC<AvatarScreenProps> = ({ onBack, onAvatarComplete, u
     }
   };
 
-  const handleCreateAccount = async () => {
+  const handleSaveAvatar = async () => {
     setIsCreatingAccount(true);
     try {
       if (selectedImage) {
-        console.log('🖼️ Uploading avatar before creating profile...');
+        console.log('🖼️ Uploading avatar to update profile...');
         
         // Upload image to Supabase Storage first
         const uploadedImageUrl = await uploadAvatarImage(selectedImage);
         
         if (uploadedImageUrl) {
-          console.log('✅ Avatar uploaded, completing profile with URL:', uploadedImageUrl);
-          await onAvatarComplete(uploadedImageUrl);
+          console.log('✅ Avatar uploaded successfully:', uploadedImageUrl);
+          
+          // Update profile with avatar
+          const currentUser = await authService.getCurrentUser();
+          if (currentUser) {
+            const updateResponse = await authService.updateProfile(currentUser.id, {
+              avatar_url: uploadedImageUrl
+            });
+            
+            if (updateResponse.success) {
+              console.log('✅ Profile updated with avatar successfully');
+              await authService.forceAuthStateRefresh();
+            } else {
+              console.error('❌ Failed to update profile with avatar:', updateResponse.error);
+            }
+          }
         } else {
-          console.log('⚠️ Avatar upload failed, completing profile without avatar');
-          Alert.alert(
-            'Upload Failed',
-            'Failed to upload profile picture. Your account will be created without a profile picture.',
-            [
-              {
-                text: 'Continue',
-                onPress: async () => {
-                  await onAvatarComplete('');
-                }
-              },
-              {
-                text: 'Try Again',
-                style: 'cancel'
-              }
-            ]
-          );
+          console.log('⚠️ Avatar upload failed');
+          Alert.alert('Upload Failed', 'Failed to upload profile picture. You can try again later from your profile settings.');
         }
-      } else {
-        console.log('📝 No image selected, creating account without avatar...');
-        await onAvatarComplete('');
       }
+      
+      // Always proceed to main app, avatar is optional
+      console.log('🏠 Proceeding to main app...');
+      await authService.forceAuthStateRefresh();
+      
     } catch (error) {
-      console.error('Error creating account:', error);
-      Alert.alert('Error', 'Failed to create account. Please try again.');
+      console.error('Error saving avatar:', error);
+      Alert.alert('Error', 'There was an issue saving your avatar, but your account is ready. You can add a photo later from your profile.');
+      // Still proceed to main app
+      await authService.forceAuthStateRefresh();
     } finally {
       setIsCreatingAccount(false);
     }
+  };
+
+  const handleSkipAvatar = async () => {
+    console.log('⏭️ Skipping avatar, proceeding to main app...');
+    await authService.forceAuthStateRefresh();
   };
 
   const fullName = `${userData.name} ${userData.lastname}`;
@@ -309,7 +323,7 @@ const AvatarScreen: React.FC<AvatarScreenProps> = ({ onBack, onAvatarComplete, u
           >
             {isLoading ? (
               <View style={styles.avatarPlaceholder}>
-                <ActivityIndicator size="large" color={COLORS.TEXT_PRIMARY} />
+              <ActivityIndicator size="large" color={COLORS.TEXT_PRIMARY} />
                 <Text style={styles.loadingText}>Loading...</Text>
               </View>
             ) : selectedImage ? (
@@ -330,26 +344,26 @@ const AvatarScreen: React.FC<AvatarScreenProps> = ({ onBack, onAvatarComplete, u
       </View>
 
       {/* Bottom Button */}
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity 
-          style={[styles.createButton, isCreatingAccount && styles.createButtonDisabled]} 
-          onPress={handleCreateAccount}
-          disabled={isCreatingAccount}
-        >
-          {isCreatingAccount ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color="white" />
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity 
+            style={[styles.createButton, isCreatingAccount && styles.createButtonDisabled]} 
+            onPress={handleSaveAvatar}
+            disabled={isCreatingAccount}
+          >
+            {isCreatingAccount ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="white" />
               <Text style={[styles.createButtonText, styles.loadingText]}>
-                {selectedImage ? 'Uploading & Creating Account...' : 'Creating Account...'}
+                {selectedImage ? 'Saving Avatar...' : 'Finishing Setup...'}
               </Text>
-            </View>
-          ) : (
+              </View>
+            ) : (
             <Text style={styles.createButtonText}>
-              Create account
+              {selectedImage ? 'Save & Continue' : 'Continue'}
             </Text>
-          )}
-        </TouchableOpacity>
-      </View>
+            )}
+          </TouchableOpacity>
+        </View>
     </SafeAreaView>
   );
 };

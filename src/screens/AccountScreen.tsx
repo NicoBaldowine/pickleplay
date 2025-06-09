@@ -156,7 +156,9 @@ const AccountScreen: React.FC<AccountScreenProps> = ({ user, profile, onSignOut,
 
         {/* Preferences Section */}
         <View style={styles.preferencesSection}>
-          <Text style={styles.sectionTitle}>Preferences</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Preferences</Text>
+          </View>
           
           <View style={styles.preferencesListContainer}>
             <ListItem
@@ -264,12 +266,18 @@ const styles = StyleSheet.create({
   preferencesSection: {
     marginBottom: 12,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginTop: 8,
+  },
   sectionTitle: {
     fontSize: 16,
     fontFamily: 'InterTight-ExtraBold',
     fontWeight: '800',
     color: COLORS.TEXT_PRIMARY,
-    marginBottom: 0,
   },
   preferencesListContainer: {
     marginBottom: 16,

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, StatusBar, ActivityIndicator, Alert, TouchableOpacity, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, StatusBar, ActivityIndicator, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Plus, User } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
 
 // Import custom components
 import TopBar from '../components/ui/TopBar';
@@ -11,35 +12,20 @@ import ListItem from '../components/ui/ListItem';
 import { doublePartnersService, DoublePartner } from '../services/doublePartnersService';
 import { authService } from '../services/authService';
 import { COLORS } from '../constants/colors';
+import { GameWithPlayers } from '../services/gameService';
 
-interface ManageDoublePartnersScreenProps {
+interface FindDoublesProps {
+  game: GameWithPlayers;
+  user: any;
+  profile: any;
   onBack: () => void;
-  onNavigateToCreatePartner?: () => void;
-  onNavigateToEditPartner?: (partner: DoublePartner) => void;
+  onPartnerSelected: (partner: DoublePartner) => void;
 }
 
-// Skeleton Loader Component
-const SkeletonListItem = () => (
-  <View style={styles.skeletonItem}>
-    {/* Avatar skeleton */}
-    <View style={styles.skeletonAvatar} />
-    
-    {/* Content skeleton */}
-    <View style={styles.skeletonContent}>
-      {/* Title skeleton */}
-      <View style={styles.skeletonTitle} />
-      
-      {/* Chips skeleton */}
-      <View style={styles.skeletonChips}>
-        <View style={[styles.skeletonChip, styles.skeletonChipMedium]} />
-      </View>
-    </View>
-  </View>
-);
-
-const ManageDoublePartnersScreen: React.FC<ManageDoublePartnersScreenProps> = ({ onBack, onNavigateToCreatePartner, onNavigateToEditPartner }) => {
+const FindDoubles: React.FC<FindDoublesProps> = ({ game, user, profile, onBack, onPartnerSelected }) => {
   const [partners, setPartners] = useState<DoublePartner[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigation = useNavigation();
 
   useEffect(() => {
     loadPartners();
@@ -61,42 +47,36 @@ const ManageDoublePartnersScreen: React.FC<ManageDoublePartnersScreenProps> = ({
     }
   };
 
-  const handleDeletePartner = (partner: DoublePartner) => {
-    Alert.alert(
-      'Remove Partner',
-      `Are you sure you want to remove ${partner.partner_name} from your doubles partners?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const result = await doublePartnersService.deletePartner(partner.id);
-              if (result.success) {
-              loadPartners(); // Reload the list
-              } else {
-                Alert.alert('Error', result.error || 'Failed to remove partner');
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to remove partner');
-            }
-          },
-        },
-      ]
-    );
+  const handlePartnerSelect = (partner: DoublePartner) => {
+    console.log('🎯 FindDoubles - Partner selected:', {
+      partner: partner,
+      partnerName: partner?.partner_name,
+      partnerId: partner?.id,
+      partnerType: typeof partner
+    });
+
+    // Navigate directly to FindReview with the selected partner
+    (navigation as any).navigate('FindReview', { 
+      game,
+      user,
+      profile,
+      selectedPartner: partner,
+      onAcceptGame: (gameId: string, phoneNumber: string, notes?: string, partnerId?: string, partnerName?: string) => {
+        // This will be handled by the main navigation flow
+        // For now, just navigate back to games
+        (navigation as any).navigate('TabNavigator', { screen: 'Games' });
+      }
+    });
   };
 
-  const handleAddPartner = () => {
-    onNavigateToCreatePartner?.();
-  };
-
-  const handlePartnerCreated = () => {
-    loadPartners(); // Refresh the list when a partner is created
-  };
-
-  const handleEditPartner = (partner: DoublePartner) => {
-    onNavigateToEditPartner?.(partner);
+  const handleCreatePartner = () => {
+    // Navigate to CreatePartnerScreen
+    (navigation as any).navigate('CreatePartner', {
+      // Pass a callback to refresh partners when a new one is created
+      onPartnerCreated: () => {
+        loadPartners(); // Refresh the partners list
+      }
+    });
   };
 
   const renderPartnerItem = (partner: DoublePartner) => {
@@ -121,16 +101,17 @@ const ManageDoublePartnersScreen: React.FC<ManageDoublePartnersScreenProps> = ({
         chips={chips}
         chipBackgrounds={chipBackgrounds}
         avatarIcon={avatarIcon}
-        onPress={() => handleEditPartner(partner)}
+        onPress={() => handlePartnerSelect(partner)}
+        style={styles.partnerItem}
       />
     );
   };
 
-  const renderAddPartnerButton = () => (
+  const renderCreatePartnerButton = () => (
     <ListItem
       avatarIcon={<Plus size={20} color="#000000" />}
       title="Create a new partner"
-      onPress={handleAddPartner}
+      onPress={handleCreatePartner}
       style={styles.createPartnerItem}
     />
   );
@@ -156,26 +137,22 @@ const ManageDoublePartnersScreen: React.FC<ManageDoublePartnersScreenProps> = ({
     }
 
     return (
-    <View style={styles.emptyStateContainer}>
-      <View style={styles.emptyIconContainer}>
+      <View style={styles.emptyStateContainer}>
+        <View style={styles.emptyIconContainer}>
           <User size={48} color="#CCC" />
+        </View>
+        <Text style={styles.emptyStateTitle}>No double partners yet</Text>
+        <Text style={styles.emptyStateDescription}>
+          Create your first doubles partner to start playing games together.
+        </Text>
       </View>
-      <Text style={styles.emptyStateTitle}>No double partners yet</Text>
-      <Text style={styles.emptyStateDescription}>
-        Add your regular doubles partners to easily schedule games together.
-      </Text>
-    </View>
-  );
+    );
   };
 
-  const renderSkeletonLoader = () => (
-    <View style={styles.savedPartnersSection}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Saved Partners</Text>
-      </View>
-      {Array.from({ length: 3 }).map((_, index) => (
-        <SkeletonListItem key={index} />
-      ))}
+  const renderLoadingState = () => (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#000000" />
+      <Text style={styles.loadingText}>Loading partners...</Text>
     </View>
   );
 
@@ -184,7 +161,7 @@ const ManageDoublePartnersScreen: React.FC<ManageDoublePartnersScreenProps> = ({
       <StatusBar barStyle="dark-content" />
       
       <TopBar
-        title="Your Doubles Partner"
+        title="Select Your Partner"
         leftIcon={<ArrowLeft size={24} color="#000000" />}
         onLeftIconPress={onBack}
         style={styles.topBar}
@@ -193,10 +170,10 @@ const ManageDoublePartnersScreen: React.FC<ManageDoublePartnersScreenProps> = ({
       />
 
       <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
-        {renderAddPartnerButton()}
+        {renderCreatePartnerButton()}
         
         {loading ? (
-          renderSkeletonLoader()
+          renderLoadingState()
         ) : (
           <>
             {renderSavedPartners()}
@@ -245,6 +222,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 60,
   },
+  savedPartnersSection: {
+    marginBottom: 24,
+  },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -258,8 +238,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.TEXT_PRIMARY,
   },
-  savedPartnersSection: {
-    marginBottom: 24,
+  partnerItem: {
+    marginBottom: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    minHeight: 60,
   },
   emptyStateContainer: {
     flex: 1,
@@ -273,13 +256,16 @@ const styles = StyleSheet.create({
   },
   emptyStateTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
     color: '#333',
     textAlign: 'center',
     marginBottom: 8,
   },
   emptyStateDescription: {
     fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
     color: '#888',
     textAlign: 'center',
     lineHeight: 22,
@@ -292,49 +278,11 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
+    fontFamily: 'InterTight-ExtraBold',
+    fontWeight: '800',
     color: '#888',
     marginTop: 12,
   },
-  skeletonItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5E9CF',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-    minHeight: 80,
-  },
-  skeletonAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.07)',
-    marginRight: 12,
-  },
-  skeletonContent: {
-    flex: 1,
-    marginRight: 12,
-  },
-  skeletonTitle: {
-    height: 18,
-    backgroundColor: 'rgba(0, 0, 0, 0.07)',
-    borderRadius: 9,
-    marginBottom: 10,
-    width: '70%',
-  },
-  skeletonChips: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  skeletonChip: {
-    height: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.07)',
-    borderRadius: 10,
-  },
-  skeletonChipMedium: {
-    width: 80,
-  },
 });
 
-export default ManageDoublePartnersScreen; 
+export default FindDoubles; 

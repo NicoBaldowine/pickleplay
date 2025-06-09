@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 DO $$ 
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_profiles_email') THEN
-        CREATE INDEX idx_profiles_email ON public.profiles(email);
+CREATE INDEX idx_profiles_email ON public.profiles(email);
     END IF;
 END $$;
 
@@ -109,6 +109,10 @@ CREATE TABLE IF NOT EXISTS public.game_users (
     -- For doubles
     team TEXT CHECK (team IN ('A', 'B')),
     
+    -- Partner information (for doubles games)
+    partner_name TEXT,
+    partner_id UUID REFERENCES public.double_partners(id) ON DELETE SET NULL,
+    
     -- Timestamps
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -144,23 +148,23 @@ CREATE TABLE IF NOT EXISTS public.double_partners (
 DO $$ 
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_games_creator') THEN
-        CREATE INDEX idx_games_creator ON public.games(creator_id);
+CREATE INDEX idx_games_creator ON public.games(creator_id);
     END IF;
     
     IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_games_date') THEN
-        CREATE INDEX idx_games_date ON public.games(scheduled_date);
+CREATE INDEX idx_games_date ON public.games(scheduled_date);
     END IF;
     
     IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_games_status') THEN
-        CREATE INDEX idx_games_status ON public.games(status);
+CREATE INDEX idx_games_status ON public.games(status);
     END IF;
     
     IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_game_users_game') THEN
-        CREATE INDEX idx_game_users_game ON public.game_users(game_id);
+CREATE INDEX idx_game_users_game ON public.game_users(game_id);
     END IF;
     
     IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_game_users_user') THEN
-        CREATE INDEX idx_game_users_user ON public.game_users(user_id);
+CREATE INDEX idx_game_users_user ON public.game_users(user_id);
     END IF;
     
     IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_double_partners_user') THEN
@@ -210,24 +214,24 @@ $$ LANGUAGE plpgsql;
 DO $$ 
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.triggers WHERE trigger_name = 'update_profiles_updated_at') THEN
-        CREATE TRIGGER update_profiles_updated_at
-            BEFORE UPDATE ON public.profiles
-            FOR EACH ROW
-            EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER update_profiles_updated_at
+    BEFORE UPDATE ON public.profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at();
     END IF;
-    
+
     IF NOT EXISTS (SELECT 1 FROM information_schema.triggers WHERE trigger_name = 'update_games_updated_at') THEN
-        CREATE TRIGGER update_games_updated_at
-            BEFORE UPDATE ON public.games
-            FOR EACH ROW
-            EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER update_games_updated_at
+    BEFORE UPDATE ON public.games
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at();
     END IF;
-    
+
     IF NOT EXISTS (SELECT 1 FROM information_schema.triggers WHERE trigger_name = 'update_game_users_updated_at') THEN
-        CREATE TRIGGER update_game_users_updated_at
-            BEFORE UPDATE ON public.game_users
-            FOR EACH ROW
-            EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER update_game_users_updated_at
+    BEFORE UPDATE ON public.game_users
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at();
     END IF;
     
     IF NOT EXISTS (SELECT 1 FROM information_schema.triggers WHERE trigger_name = 'update_double_partners_updated_at') THEN

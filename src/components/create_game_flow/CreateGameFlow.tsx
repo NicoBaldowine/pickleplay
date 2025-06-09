@@ -58,7 +58,7 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
   const loadCourts = async () => {
     try {
       setIsFetchingCourts(true);
-      const courtsData = await courtsService.getCourtsByCity('Denver');
+      const courtsData = await courtsService.getAllCourtsWithDistance();
       setCourts(courtsData);
     } catch (error) {
       console.error('Error loading courts:', error);
@@ -196,11 +196,32 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
       });
       
       if (result.success && result.gameId) {
-        // If it's a doubles game and we have a partner, add them to the game
-        if (gameData.game_type === 'doubles' && gameData.partner_name) {
-          // TODO: In a real app, we'd need to find the partner's user ID
-          // For now, we'll just note it in the game notes
-          console.log('Partner specified:', gameData.partner_name);
+        // For doubles games, update creator's game_users record with partner info
+        if (gameData.game_type === 'doubles' && gameData.partner_name && gameData.partner_id) {
+          try {
+            console.log('🎾 Updating creator record with partner info:', {
+              gameId: result.gameId,
+              userId: currentUser.id,
+              partnerId: gameData.partner_id,
+              partnerName: gameData.partner_name
+            });
+
+            // Update creator's existing game_users record with partner information
+            const updateResult = await gameService.updateGameUserPartner(
+              result.gameId, 
+              currentUser.id, 
+              gameData.partner_id, 
+              gameData.partner_name
+            );
+
+            if (updateResult.success) {
+              console.log('✅ Successfully updated creator record with partner info');
+            } else {
+              console.error('❌ Failed to update creator record:', updateResult.error);
+            }
+          } catch (error) {
+            console.error('❌ Error updating creator record:', error);
+          }
         }
         
         Alert.alert('Game Scheduled!', `Your ${gameData.game_type} game has been scheduled successfully.`);
@@ -325,15 +346,15 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
             );
           } else {
             // Have level, now select court
-            return (
-              <SelectCourtStep
-                courts={courts}
-                isLoading={isFetchingCourts} 
-                onClose={onClose}
-                onBack={handlePrevStep}
-                onSelectCourt={handleCourtSelect}
-              />
-            );
+          return (
+            <SelectCourtStep
+              courts={courts}
+              isLoading={isFetchingCourts} 
+              onClose={onClose}
+              onBack={handlePrevStep}
+              onSelectCourt={handleCourtSelect}
+            />
+          );
           }
         } else {
           // Singles: Schedule
@@ -362,14 +383,14 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
             );
           } else {
             // Have court, now schedule
-            return (
-              <ScheduleStep
-                onClose={onClose}
-                onBack={handlePrevStep}
-                onSchedule={handleScheduleSelect} 
-                isSubmitting={false} 
-              />
-            );
+          return (
+            <ScheduleStep
+              onClose={onClose}
+              onBack={handlePrevStep}
+              onSchedule={handleScheduleSelect} 
+              isSubmitting={false} 
+            />
+          );
           }
         } else {
           // Singles: Review
@@ -415,16 +436,16 @@ const CreateGameFlow: React.FC<CreateGameFlowProps> = ({ onClose, onGameCreated 
       case 7:
         // Doubles: Final Review
         if (gameData.game_type === 'doubles') {
-          return (
-            <ReviewStep
-              onClose={onClose}
-              onBack={handlePrevStep}
-              onScheduleGame={handleScheduleGame}
-              isSubmitting={isLoading}
-              gameData={gameData}
-              courts={courts}
-            />
-          );
+        return (
+          <ReviewStep
+            onClose={onClose}
+            onBack={handlePrevStep}
+            onScheduleGame={handleScheduleGame}
+            isSubmitting={isLoading}
+            gameData={gameData}
+            courts={courts}
+          />
+        );
         }
         return null;
       default:

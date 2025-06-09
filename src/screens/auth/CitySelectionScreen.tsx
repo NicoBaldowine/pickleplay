@@ -20,6 +20,8 @@ import { COLORS } from '../../constants/colors';
 import { globalTextStyles } from '../../styles/globalStyles';
 import ListItem from '../../components/ui/ListItem';
 import TopBar from '../../components/ui/TopBar';
+import { cityRequestsService } from '../../services/cityRequestsService';
+import { authService } from '../../services/authService';
 
 interface CitySelectionScreenProps {
   onBack: () => void;
@@ -41,6 +43,34 @@ const CitySelectionScreen: React.FC<CitySelectionScreenProps> = ({ onBack, onCit
     const city = SUPPORTED_CITIES.find(c => c.id === cityId);
     if (city?.supported) {
       onCitySelected(city.name);
+    }
+  };
+
+  const saveCityRequest = async (cityName: string) => {
+    try {
+      // Try to get current user info for better tracking
+      let userEmail = undefined;
+      let userId = undefined;
+      
+      try {
+        const currentUser = await authService.getCurrentUser();
+        if (currentUser) {
+          userEmail = currentUser.email;
+          userId = currentUser.id;
+        }
+      } catch (error) {
+        console.log('No user session during city request, continuing without user info');
+      }
+      
+      const result = await cityRequestsService.saveCityRequest(cityName, userEmail, userId);
+      
+      if (result.success) {
+        console.log('✅ City request saved successfully');
+      } else {
+        console.error('❌ Failed to save city request:', result.error);
+      }
+    } catch (error) {
+      console.error('💥 Error saving city request:', error);
     }
   };
 
@@ -67,9 +97,13 @@ const CitySelectionScreen: React.FC<CitySelectionScreenProps> = ({ onBack, onCit
                   },
                   {
                     text: 'Add City',
-                    onPress: (cityName) => {
+                    onPress: async (cityName) => {
                       if (cityName && cityName.trim()) {
                         console.log('🏙️ User added city:', cityName.trim());
+                        
+                        // Save to Supabase
+                        await saveCityRequest(cityName.trim());
+                        
                         Alert.alert(
                           'Thank You!',
                           `We've noted your interest in ${cityName.trim()}. We'll consider adding it in future updates!`,
@@ -127,7 +161,7 @@ const CitySelectionScreen: React.FC<CitySelectionScreenProps> = ({ onBack, onCit
           {/* Another city option */}
           <ListItem
             title="Another city"
-            avatarIcon={<MapPin size={20} color={COLORS.TEXT_SECONDARY} />}
+            avatarIcon={<MapPin size={20} color={COLORS.TEXT_PRIMARY} />}
             rightElement={<ChevronRight size={16} color={COLORS.TEXT_SECONDARY} />}
             onPress={handleAnotherCityPress}
             style={styles.listItem}

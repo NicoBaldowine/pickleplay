@@ -6,45 +6,73 @@ import {
   TouchableOpacity, 
   TextInput, 
   Alert, 
-  Modal, 
   Keyboard, 
   ScrollView, 
   StatusBar, 
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
-  TouchableWithoutFeedback
+  ActionSheetIOS
 } from 'react-native';
-import { ArrowLeft, ChevronDown, Check } from 'lucide-react-native';
+import { ArrowLeft, ChevronDown } from 'lucide-react-native';
 import { COLORS } from '../../constants/colors';
 import { globalTextStyles } from '../../styles/globalStyles';
 import TopBar from '../../components/ui/TopBar';
+import { authService } from '../../services/authService';
 
 interface PersonalInfoScreenProps {
   onBack: () => void;
   onComplete: (personalData: { name: string; lastname: string; level: string }) => void;
+  onProfileCreated?: () => void;
   isLoading?: boolean;
   isCompletingRegistration?: boolean;
+  verifiedUserId?: string;
+  userData?: any;
 }
 
 const ICON_SIZE_ACTION = 24;
-const ICON_SIZE_DROPDOWN = 18;
 const ICON_COLOR_DARK = '#000000';
-const ICON_COLOR_MEDIUM = '#888';
-const ICON_COLOR_BLUE = '#007AFF';
 
 const levelOptions = [
-  { id: 'beginner', label: 'Beginner' },
-  { id: 'intermediate', label: 'Intermediate' },
-  { id: 'advanced', label: 'Advanced' },
-  { id: 'expert', label: 'Expert' },
+  { 
+    id: 'beginner', 
+    label: 'Beginner', 
+    description: 'Learning basic rules and strokes',
+    range: '1.0-2.5'
+  },
+  { 
+    id: 'intermediate', 
+    label: 'Intermediate', 
+    description: 'Consistent serves and developing strategy',
+    range: '3.0-3.5'
+  },
+  { 
+    id: 'advanced', 
+    label: 'Advanced', 
+    description: 'Powerful shots and tournament play',
+    range: '4.0-4.5'
+  },
+  { 
+    id: 'expert', 
+    label: 'Expert', 
+    description: 'Tournament player',
+    range: '5.0+'
+  },
 ];
 
-const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onComplete, isLoading = false, isCompletingRegistration = false }) => {
+const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ 
+  onBack, 
+  onComplete, 
+  onProfileCreated,
+  isLoading = false, 
+  isCompletingRegistration = false,
+  verifiedUserId,
+  userData
+}) => {
   const [name, setName] = useState('');
   const [lastname, setLastname] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('');
-  const [showLevelDropdown, setShowLevelDropdown] = useState(false);
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
   
   const nameInputRef = useRef<TextInput>(null);
   const lastnameInputRef = useRef<TextInput>(null);
@@ -62,8 +90,8 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
     return () => clearTimeout(timer);
   }, []);
 
-  const handleComplete = () => {
-    if (isLoading) return;
+  const handleComplete = async () => {
+    if (isLoading || isCreatingProfile) return;
     
     if (name.trim().length === 0) {
       Alert.alert('Name Required', 'Please enter your first name.');
@@ -82,21 +110,92 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
 
     Keyboard.dismiss();
     
-    onComplete({
-      name: name.trim(),
-      lastname: lastname.trim(),
-      level: selectedLevel,
-    });
+    // If we have verifiedUserId and userData, create profile directly
+    if (verifiedUserId && userData && onProfileCreated) {
+      await createProfileDirectly();
+    } else {
+      // Fall back to old behavior
+      onComplete({
+        name: name.trim(),
+        lastname: lastname.trim(),
+        level: selectedLevel,
+      });
+    }
   };
 
-  const handleLevelSelect = (levelId: string) => {
-    setSelectedLevel(levelId);
-    setShowLevelDropdown(false);
+  const createProfileDirectly = async () => {
+    setIsCreatingProfile(true);
+    try {
+      console.log('🚀 Creating profile directly from PersonalInfoScreen');
+      console.log('🔧 User ID:', verifiedUserId);
+      
+      const fullUserData = {
+        ...userData,
+        name: name.trim(),
+        lastname: lastname.trim(),
+        level: selectedLevel,
+      };
+      
+      console.log('📋 Full user data for profile creation:', fullUserData);
+      
+      const response = await authService.createProfileDirect(verifiedUserId!, fullUserData);
+      
+      if (response.success) {
+        console.log('✅ Profile created successfully! Proceeding to avatar...');
+        // Force auth state refresh
+        await authService.forceAuthStateRefresh();
+        onProfileCreated!();
+      } else {
+        console.error('❌ Profile creation failed:', response.error);
+        Alert.alert('Error', response.error || 'Failed to create profile. Please try again.');
+      }
+    } catch (error) {
+      console.error('💥 Error creating profile:', error);
+      Alert.alert('Error', 'Failed to create profile. Please try again.');
+    } finally {
+      setIsCreatingProfile(false);
+    }
   };
 
-  const getSelectedLevelLabel = () => {
+
+
+  const getSelectedLevelDisplay = () => {
     const level = levelOptions.find(option => option.id === selectedLevel);
-    return level ? level.label : 'Select your level';
+    return level ? `${level.label}, ${level.range}` : 'Select your level';
+  };
+
+  const handleLevelPress = () => {
+    if (Platform.OS === 'ios') {
+      // Create options array with level and range
+      const options = levelOptions.map(option => `${option.label} (${option.range})`);
+      options.push('Cancel');
+
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: options,
+          cancelButtonIndex: options.length - 1,
+          title: 'Select your level',
+        },
+        (buttonIndex) => {
+          if (buttonIndex < levelOptions.length) {
+            setSelectedLevel(levelOptions[buttonIndex].id);
+          }
+        }
+      );
+    } else {
+      // Android fallback - could use an Alert with options
+      const alertOptions = levelOptions.map(option => ({
+        text: `${option.label} (${option.range})`,
+        onPress: () => setSelectedLevel(option.id)
+      }));
+      alertOptions.push({ text: 'Cancel', onPress: () => {} });
+      
+      Alert.alert(
+        'Select Level',
+        'Choose your pickleball skill level',
+        alertOptions
+      );
+    }
   };
 
   const handleNameSubmit = () => {
@@ -110,6 +209,7 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
   };
 
   const isFormValid = name.trim().length > 0 && lastname.trim().length > 0 && selectedLevel !== '';
+  const isCurrentlyLoading = isLoading || isCreatingProfile;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -123,6 +223,8 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
           onLeftIconPress={onBack}
         />
       )}
+      
+
 
       <KeyboardAvoidingView 
         style={styles.keyboardAvoidingView}
@@ -154,7 +256,7 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
               onChangeText={setName}
               autoCapitalize="words"
               returnKeyType="next"
-              editable={!isLoading}
+              editable={!isCurrentlyLoading}
               onSubmitEditing={handleNameSubmit}
               onFocus={() => {
                 console.log('🎯 Name input focused successfully');
@@ -174,7 +276,7 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
               onChangeText={setLastname}
               autoCapitalize="words"
               returnKeyType="done"
-              editable={!isLoading}
+              editable={!isCurrentlyLoading}
               onSubmitEditing={handleLastnameSubmit}
               onFocus={() => {
                 console.log('🎯 Last name input focused successfully');
@@ -182,21 +284,30 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
             />
           </View>
 
-          {/* Level Dropdown */}
+          {/* Level Selection */}
           <View style={styles.inputSection}>
             <Text style={styles.inputLabel}>Skill Level</Text>
             <TouchableOpacity 
-              style={styles.dropdownButton}
-              onPress={() => setShowLevelDropdown(true)}
+              style={styles.levelButton}
+              onPress={handleLevelPress}
+              disabled={isCurrentlyLoading}
             >
               <Text style={[
-                styles.dropdownText, 
+                styles.levelButtonText, 
                 selectedLevel === '' && styles.placeholderText
               ]}>
-                {getSelectedLevelLabel()}
+                {getSelectedLevelDisplay()}
               </Text>
               <ChevronDown size={18} color="#888" />
             </TouchableOpacity>
+            {/* Show description below button when level is selected */}
+            {selectedLevel && (
+              <View style={styles.levelDescriptionContainer}>
+                <Text style={styles.levelDescription}>
+                  {levelOptions.find(option => option.id === selectedLevel)?.description}
+                </Text>
+              </View>
+            )}
           </View>
         </ScrollView>
 
@@ -205,50 +316,20 @@ const PersonalInfoScreen: React.FC<PersonalInfoScreenProps> = ({ onBack, onCompl
           <TouchableOpacity 
             style={[
               styles.continueButton, 
-              (!isFormValid || isLoading) && styles.continueButtonDisabled
+              (!isFormValid || isCurrentlyLoading) && styles.continueButtonDisabled
             ]}
             onPress={handleComplete}
-            disabled={!isFormValid || isLoading}
+            disabled={!isFormValid || isCurrentlyLoading}
           >
             <Text style={[
               styles.continueButtonText,
-              (!isFormValid || isLoading) && styles.continueButtonTextDisabled
+              (!isFormValid || isCurrentlyLoading) && styles.continueButtonTextDisabled
             ]}>
-              {isLoading ? 'Creating Account...' : 'Continue'}
+              {isCreatingProfile ? 'Creating Profile...' : isLoading ? 'Creating Account...' : 'Continue'}
             </Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-
-      {/* Level Selection Modal */}
-      <Modal
-        visible={showLevelDropdown}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowLevelDropdown(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowLevelDropdown(false)}
-        >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Skill Level</Text>
-            {levelOptions.map((option) => (
-              <TouchableOpacity
-                key={option.id}
-                style={styles.modalOption}
-                onPress={() => handleLevelSelect(option.id)}
-              >
-                <Text style={styles.modalOptionText}>{option.label}</Text>
-                {selectedLevel === option.id && (
-                  <Check size={20} color={ICON_COLOR_BLUE} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -266,7 +347,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   scrollContentContainer: {
-    paddingBottom: 120,
+    paddingBottom: 20,
     paddingTop: 20,
     flexGrow: 1,
   },
@@ -300,7 +381,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#E0E0E0',
   },
-  dropdownButton: {
+  levelButton: {
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
     paddingHorizontal: 16,
@@ -311,77 +392,42 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  dropdownText: {
+  levelButtonText: {
     fontSize: 16,
     color: '#333',
   },
   placeholderText: {
     color: '#999',
   },
+  levelDescriptionContainer: {
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  levelDescription: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+  },
   buttonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: COLORS.BACKGROUND_PRIMARY,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingBottom: 16,
+    padding: 16,
   },
   continueButton: {
-    backgroundColor: COLORS.TEXT_PRIMARY,
+    backgroundColor: '#000000',
     borderRadius: 100,
     paddingVertical: 16,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   continueButtonDisabled: {
-    opacity: 0.5,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   continueButtonText: {
     fontSize: 16,
     fontFamily: 'InterTight-ExtraBold',
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: 'white',
   },
   continueButtonTextDisabled: {
-    opacity: 0.7,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: COLORS.BACKGROUND_PRIMARY,
-    borderRadius: 16,
-    padding: 20,
-    width: '80%',
-    maxWidth: 300,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontFamily: 'InterTight-ExtraBold',
-    fontWeight: '800',
-    color: COLORS.TEXT_PRIMARY,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  modalOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.BACKGROUND_SECONDARY,
-  },
-  modalOptionText: {
-    fontSize: 16,
-    fontFamily: 'InterTight-ExtraBold',
-    fontWeight: '800',
-    color: COLORS.TEXT_PRIMARY,
+    color: '#999999',
   },
 });
 

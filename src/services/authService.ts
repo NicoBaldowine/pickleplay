@@ -24,70 +24,55 @@ class AuthService {
     try {
       console.log('🔍 Checking if email exists:', email);
       
-      // Simplified approach: Let Supabase handle duplicate detection during actual signup
-      // This method now focuses on obvious cases only
+      // Check directly in the profiles table first (most reliable for verified users)
+      const { data: profileData, error: profileError } = await supabaseClient
+        .from('profiles')
+        .select('id, email')
+        .eq('email', email.toLowerCase().trim())
+        .single();
       
+      if (!profileError && profileData) {
+        console.log('✅ Email found in profiles table - user exists and is verified');
+        return true;
+      }
+      
+      // If not in profiles, check if there's a verified user in auth.users
+      // We'll use the admin API to check auth.users table
       try {
-        // Try a very lightweight check first - attempt to get user by email using admin endpoint
-        // If this fails, we'll be permissive and allow the signup attempt
-        const response = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
-          method: 'POST',
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/auth.users?email=eq.${encodeURIComponent(email.toLowerCase().trim())}&select=id,email,email_confirmed_at`, {
+          method: 'GET',
           headers: {
             'Content-Type': 'application/json',
             'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           },
-          body: JSON.stringify({
-            email: email.toLowerCase().trim(),
-          }),
         });
         
-        // If we get a 429 (rate limit), be permissive
-        if (response.status === 429) {
-          console.log('⚠️ Rate limited, allowing signup attempt');
-          return false;
-        }
-        
-        // If we get a 400, check the specific error
-        if (response.status === 400) {
-          try {
-            const data = await response.json();
-            const errorMessage = (data.msg || data.message || '').toLowerCase();
-            
-            // Only return true if we get a clear "user exists" type message
-            if (errorMessage.includes('rate limit') || 
-                errorMessage.includes('too many requests')) {
-              console.log('⚠️ Rate limited, allowing signup attempt');
+        if (response.ok) {
+          const users = await response.json();
+          if (users && users.length > 0) {
+            // Check if any user is verified
+            const verifiedUser = users.find((user: any) => user.email_confirmed_at);
+            if (verifiedUser) {
+              console.log('✅ Email found in auth.users and is verified');
+              return true;
+            } else {
+              console.log('⚠️ Email found in auth.users but not verified - allowing signup');
               return false;
             }
-            
-            // Be very specific about what constitutes "user exists"
-            if (errorMessage.includes('user already registered') ||
-                errorMessage.includes('user exists') ||
-                errorMessage.includes('email already taken') ||
-                errorMessage.includes('already has an account')) {
-              console.log('✅ Email definitely exists');
-              return true;
-            }
-          } catch (e) {
-            // If we can't parse the response, be permissive
-            console.log('⚠️ Could not parse error response, allowing signup');
-            return false;
           }
         }
-        
-        // For any other case, be permissive and let the actual signup handle duplicates
-        console.log('📝 No clear evidence email exists, allowing signup attempt');
-        return false;
-        
-      } catch (networkError) {
-        // On network errors, be permissive
-        console.log('📶 Network error during check, allowing signup attempt');
-        return false;
+      } catch (authCheckError) {
+        console.log('⚠️ Could not check auth.users table, falling back to signup attempt');
       }
       
+      // If we reach here, email was not found in either table
+      console.log('📝 Email not found in any table, allowing signup');
+      return false;
+      
     } catch (error) {
-      console.log('🔧 Error checking email, being permissive and allowing signup:', error);
-      // Always be permissive on errors - let the actual signup handle it
+      console.log('🔧 Error checking email existence:', error);
+      // On error, be permissive but log the issue
       return false;
     }
   }
@@ -284,6 +269,9 @@ class AuthService {
         }
       });
 
+      // 🚀 Start proactive session monitoring
+      this.startSessionMonitoring();
+
       return { 
         success: true, 
         user: data.user,
@@ -333,6 +321,9 @@ class AuthService {
 
       console.log('✅ User signed out and all data cleared');
 
+      // 🛑 Stop session monitoring
+      this.stopSessionMonitoring();
+
       // Notify listeners
       this.authStateCallbacks.forEach(callback => {
         try {
@@ -354,6 +345,13 @@ class AuthService {
    */
   async getCurrentUser(): Promise<any | null> {
     try {
+      // 🚀 PROACTIVE SESSION REFRESH - Check and refresh if needed
+      try {
+        await this.checkAndRefreshSession();
+      } catch (refreshError) {
+        console.log('⚠️ Proactive refresh failed, continuing with existing session:', refreshError);
+      }
+
       // First check if we have a stored session
       const storedSession = await AsyncStorage.getItem('supabase_session');
       const storedUser = await AsyncStorage.getItem('supabase_user');
@@ -800,6 +798,76 @@ class AuthService {
   }
 
   /**
+   * Create profile using direct HTTP method (for registration flow when session is missing)
+   */
+  async createProfileDirect(userId: string, userData: Partial<UserData>): Promise<AuthResponse> {
+    try {
+      console.log('🔧 Creating profile using direct method for user:', userId);
+      console.log('📋 UserData received:', userData);
+      console.log('🖼️ DEBUG: avatarUri in userData:', userData.avatarUri);
+      
+      // Validate required data
+      if (!userData.name || !userData.lastname) {
+        console.error('❌ Missing required fields:', { name: userData.name, lastname: userData.lastname });
+        return { 
+          success: false, 
+          error: 'Missing required profile information (name and lastname)' 
+        };
+      }
+      
+      const profileData = {
+        id: userId,
+        email: userData.email,
+        first_name: userData.name || 'User',
+        last_name: userData.lastname || '',
+        pickleball_level: (userData.level || 'beginner').toLowerCase(),
+        city: userData.city,
+        avatar_url: userData.avatarUri,
+      };
+
+      console.log('📋 Profile data to save:', profileData);
+
+      // Use direct HTTP request with anon key (should work if RLS allows inserts)
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Prefer': 'return=representation',
+        },
+        body: JSON.stringify(profileData),
+      });
+      
+      console.log('📡 Direct insert response status:', response.status);
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Profile created successfully via direct method:', result);
+        
+        // Clear cache and save to storage
+        await AsyncStorage.removeItem(`profile_${userId}`);
+        await AsyncStorage.removeItem(`profile_cache_time_${userId}`);
+        
+        return { success: true };
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Direct insert failed:', errorData);
+        
+        // If it fails due to auth, try the regular method as fallback
+        console.log('🔄 Direct method failed, trying regular method...');
+        return await this.createProfile(userId, userData);
+      }
+      
+    } catch (error: any) {
+      console.error('💥 Direct profile creation error:', error);
+      // Fallback to regular method
+      console.log('🔄 Direct method error, trying regular method...');
+      return await this.createProfile(userId, userData);
+    }
+  }
+
+  /**
    * Create user profile after email verification
    */
   async createProfile(userId: string, userData: Partial<UserData>): Promise<AuthResponse> {
@@ -1054,6 +1122,77 @@ class AuthService {
         success: false, 
         error: error.message || 'Failed to update password' 
       };
+    }
+  }
+
+  /**
+   * Check if session is about to expire and refresh proactively
+   */
+  async checkAndRefreshSession(): Promise<{ success: boolean; error?: string }> {
+    try {
+      const sessionData = await AsyncStorage.getItem('supabase_session');
+      if (!sessionData) {
+        return { success: false, error: 'No session found' };
+      }
+
+      const session = JSON.parse(sessionData);
+      if (!session.expires_at) {
+        return { success: true }; // No expiration set
+      }
+
+      const currentTime = Date.now();
+      const expiresAt = session.expires_at;
+      const timeUntilExpiry = expiresAt - currentTime;
+      
+      // Refresh if less than 10 minutes (600,000ms) until expiry
+      if (timeUntilExpiry < 600000) {
+        console.log('🔄 Session expires soon, refreshing proactively...', {
+          timeUntilExpiry: Math.round(timeUntilExpiry / 60000), // minutes
+          expiresAt: new Date(expiresAt).toLocaleTimeString()
+        });
+        return await this.refreshSession();
+      }
+
+      console.log('✅ Session still valid for', Math.round(timeUntilExpiry / 60000), 'minutes');
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error checking session expiry:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Start proactive session management
+   */
+  startSessionMonitoring(): void {
+    // Clear any existing interval
+    if ((this as any).sessionMonitorInterval) {
+      clearInterval((this as any).sessionMonitorInterval);
+    }
+
+    console.log('🚀 Starting proactive session monitoring...');
+    
+    // Check every 3 minutes if session needs refresh
+    (this as any).sessionMonitorInterval = setInterval(async () => {
+      try {
+        const result = await this.checkAndRefreshSession();
+        if (!result.success && result.error !== 'No session found') {
+          console.log('⚠️ Background session refresh failed:', result.error);
+        }
+      } catch (error) {
+        console.log('⚠️ Background session check error:', error);
+      }
+    }, 180000); // 3 minutes
+  }
+
+  /**
+   * Stop session monitoring (useful for cleanup)
+   */
+  stopSessionMonitoring(): void {
+    if ((this as any).sessionMonitorInterval) {
+      console.log('🛑 Stopping session monitoring');
+      clearInterval((this as any).sessionMonitorInterval);
+      (this as any).sessionMonitorInterval = null;
     }
   }
 

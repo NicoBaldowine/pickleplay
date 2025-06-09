@@ -146,27 +146,19 @@ class NotificationService {
     const title = '⏰ Game Expired';
     const body = `Your ${gameType} game scheduled for ${this.formatDateTime(scheduledDate, scheduledTime)} has expired. No one joined in time.`;
 
-    // Schedule notification for when the game time passes
-    const gameDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
-    const now = new Date();
-    
-    if (gameDateTime > now) {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title,
-          body,
-          data: {
-            type: 'gameExpired',
-            gameId,
-            gameType,
-          },
+    // Send notification immediately when game expires
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data: {
+          type: 'gameExpired',
+          gameId,
+          gameType,
         },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: gameDateTime,
-        },
-      });
-    }
+      },
+      trigger: null, // Show immediately
+    });
   }
 
   async scheduleGameCancelledNotification(
@@ -215,10 +207,10 @@ class NotificationService {
 
     // Schedule notification for 1 hour before the game
     const gameDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
-    const notificationTime = new Date(gameDateTime.getTime() - 60 * 60 * 1000); // 1 hour before
     const now = new Date();
+    const secondsUntilNotification = Math.floor((gameDateTime.getTime() - now.getTime() - 60 * 60 * 1000) / 1000); // 1 hour before game
     
-    if (notificationTime > now) {
+    if (secondsUntilNotification > 0) {
       await Notifications.scheduleNotificationAsync({
         content: {
           title,
@@ -232,8 +224,8 @@ class NotificationService {
           },
         },
         trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: notificationTime,
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds: secondsUntilNotification,
         },
       });
     }
